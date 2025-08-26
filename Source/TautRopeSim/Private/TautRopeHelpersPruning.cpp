@@ -1,5 +1,5 @@
 ﻿
-#include "TautRopeHelpers.h"
+#include "TautRopeHelpersPruning.h"
 #include "TautRopeConfig.h"
 
 namespace TautRope

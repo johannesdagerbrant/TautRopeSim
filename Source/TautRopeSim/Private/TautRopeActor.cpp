@@ -368,13 +368,6 @@ bool ATautRopeActor::VertexPhase()
 
 bool ATautRopeActor::PruningPhase()
 {
-	for (int32 i = RopePoints.Num() - 2; i > 0; --i)
-	{
-		if (RopePoints[i].VertIndex != INDEX_NONE)
-		{
-			RopePoints.RemoveAt(i);
-		}
-	}
 	TBitArray<> PointsToRemove;
 	PointsToRemove.Init(false, RopePoints.Num());
 	for (int32 i = 1; i < RopePoints.Num() - 1; ++i)
