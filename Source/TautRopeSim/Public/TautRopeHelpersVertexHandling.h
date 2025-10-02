@@ -1,17 +1,20 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "TautRopeCollisionShape.h"
 
 namespace TautRope
 {
-	struct TAUTROPESIM_API FSlideOntoEdgeData
-	{
-		int32 EdgeIndex = INDEX_NONE;
-		float RopeSlideDot = 0.f;
-		bool operator<(const FSlideOntoEdgeData& Other) const
-		{
-			return RopeSlideDot < Other.RopeSlideDot;
-		}
-	};
+	struct FPoint;
+	struct FRopeCollisionShape;
+
+	TBitArray<> GetAdjacentPointsOnSameVertexCone(
+		const TArray<FPoint>& RopePoints
+		, const TArray<FRopeCollisionShape>& NearbyShapes
+	);
+
+	void LetPointsOnVertexSlideOntoNewEdge(
+		TArray<FPoint>& RopePoints
+		, const TArray<FRopeCollisionShape>& NearbyShapes
+	);
+	
 }

@@ -1,9 +1,85 @@
 
 #include "TautRopeHelpersMovement.h"
-#include "TautRopeConfig.h"
+#include "TautRopeCollisionShape.h"
+#include "TautRopePoint.h"
 
 namespace TautRope
 {
+    FMovementGroup::FMovementGroup(
+        const int32 InShapeIndex
+        , const int32 InVertIndex
+        , const int32 InFirstPointIndex
+    )
+        : ShapeIndex(InShapeIndex)
+        , VertIndex(InVertIndex)
+        , FirstPointIndex(InFirstPointIndex)
+    {}
+
+    TArray<FMovementGroup> GetMovementGroups(
+        const TArray<FPoint>& RopePoints,
+        const TArray<FRopeCollisionShape>& NearbyShapes
+    )
+    {
+        TArray<FMovementGroup> MovementGroups;
+        const int32 NumPoints = RopePoints.Num();
+        if (NumPoints < 3)
+        {
+            return MovementGroups;
+        }
+
+        MovementGroups.Add(
+            FMovementGroup(RopePoints[1].ShapeIndex, RopePoints[1].VertIndex, 0)
+        );
+
+        for (int32 i = 1; i < NumPoints - 1; i++)
+        {
+            const FPoint& Point = RopePoints[i];
+            FMovementGroup& CurrentGroup = MovementGroups.Last();
+            CurrentGroup.LastPointIndex = i;
+
+            const FRopeCollisionShape& Shape = NearbyShapes[Point.ShapeIndex];
+            const TArray<int32> CandidateVerts = GetCandidateVerts(Point, Shape);
+            const int32 GroupVertIndex = CurrentGroup.VertIndex;
+
+            const bool bBelongsInLastVertexGroup =
+                CurrentGroup.ShapeIndex == Point.ShapeIndex &&
+                CandidateVerts.Contains(GroupVertIndex) &&
+                !CurrentGroup.EdgeIndices.Contains(Point.EdgeIndex);
+
+            if (bBelongsInLastVertexGroup)
+            {
+                CurrentGroup.EdgeIndices.Add(Point.EdgeIndex);
+            }
+            else
+            {
+                MovementGroups.Add(
+                    FMovementGroup(Point.ShapeIndex, CandidateVerts[0], i)
+                );
+            }
+        }
+
+        if (!MovementGroups.IsEmpty())
+        {
+            MovementGroups[0].FirstPointIndex = 0;
+            MovementGroups.Last().LastPointIndex = NumPoints - 1;
+        }
+
+        return MovementGroups;
+    }
+
+    TArray<int32> GetCandidateVerts(const FPoint& Point, const FRopeCollisionShape& Shape)
+    {
+        if (Point.VertIndex != INDEX_NONE)
+        {
+            return { Point.VertIndex };
+        }
+        else
+        {
+            const FIntVector2& Edge = Shape.Edges[Point.EdgeIndex];
+            return { Edge.X, Edge.Y };
+        }
+    }
+
 	FVector FindMinDistancePointBetweenABOnLineXY(
 		const FVector& A
 		, const FVector& B

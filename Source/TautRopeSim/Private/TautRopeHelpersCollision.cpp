@@ -13,7 +13,7 @@ namespace TautRope
 		, const FVector& OriginLocationB
 		, const FVector& TargetLocationA
 		, const FVector& TargetLocationB
-		, const TArray<FCollisionShape>& Shapes
+		, const TArray<FRopeCollisionShape>& Shapes
 		, const int32 RopePointIndex
 	)
 	{
@@ -23,7 +23,7 @@ namespace TautRope
 		{
 			// TODO: for performance, early-out when AABB checks fail between segment (A,B,TargetA,TargetB) and shape.
 
-			const FCollisionShape& Shape = Shapes[ShapeIndex];
+			const FRopeCollisionShape& Shape = Shapes[ShapeIndex];
 			for (int32 EdgeIndex = 0; EdgeIndex < Shape.Edges.Num(); ++EdgeIndex)
 			{
 				if (ShapeIndex == InOutSegmentPointA.ShapeIndex)
@@ -90,7 +90,7 @@ namespace TautRope
 		{
 			// TODO: for performance, early-out on cached bitarray of AABB checks from A-movement above.
 
-			const FCollisionShape& Shape = Shapes[ShapeIndex];
+			const FRopeCollisionShape& Shape = Shapes[ShapeIndex];
 			for (int32 EdgeIndex = 0; EdgeIndex < Shape.Edges.Num(); ++EdgeIndex)
 			{
 				if (ShapeIndex == InOutSegmentPointA.ShapeIndex)

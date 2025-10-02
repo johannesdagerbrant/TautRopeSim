@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "TautRopeCollisionShape.h"
+#include "TautRopeConfig.h"
 #include "TautRopePoint.h"
 #include "TautRopeActor.generated.h"
 
@@ -25,7 +26,13 @@ private:
 	bool CollisionPhase(TArray<FVector>& TargetRopePoints);
 	bool VertexPhase();
 	bool PruningPhase();
-	void DrawDebugData() const;
+
+#if TAUT_ROPE_DEBUG_DRAWING
+	void DrawDebug() const;
+	void DrawDebugRope() const;
+	void DrawDebugRopeTouchedShapeEdges() const;
+	void DrawDebugRopeShapes() const;
+#endif // TAUT_ROPE_DEBUG_DRAWING
 
 	UPROPERTY(VisibleAnywhere, Category = "Rope")
 	USceneComponent* StartPoint;
@@ -42,5 +49,5 @@ private:
 #endif
 
 	TArray<TautRope::FPoint> RopePoints;
-	TArray<TautRope::FCollisionShape> NearbyShapes;
+	TArray<TautRope::FRopeCollisionShape> NearbyShapes;
 };

@@ -1,12 +1,12 @@
 #include "TautRopeCollisionShape.h"
-#include "TautRopeConfig.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "PhysicsEngine/ConvexElem.h"
 
 namespace TautRope
 {
-	FCollisionShape::FCollisionShape(const FKConvexElem& Convex, const FTransform& CompTransform)
+	FRopeCollisionShape::FRopeCollisionShape(const FKConvexElem& Convex, const FTransform& CompTransform)
 	{
+		TArray<FIntVector> Triangles;
 		for (int32 TriIndex = 0; TriIndex < Convex.IndexData.Num(); TriIndex += 3)
 		{
 			const int32 TriVertIndexA = Convex.IndexData[TriIndex];
@@ -25,13 +25,14 @@ namespace TautRope
 			{
 				continue;
 			}
-			AddUniqueTriangle(ShapeVertIndexA, ShapeVertIndexB, ShapeVertIndexC);
+			AddUniqueTriangle(ShapeVertIndexA, ShapeVertIndexB, ShapeVertIndexC, Triangles);
 		}
 
 		for (FVector& Vert : Vertices)
 		{
 			Vert = CompTransform.TransformPosition(Vert);
 		}
+
 		TArray<FIntVector> TriIndexToEdgeIndex;
 		TMap<int32, TArray<FIntVector>> EdgeIndexToTriangles;
 		for (const FIntVector& Tri : Triangles)
@@ -80,7 +81,7 @@ namespace TautRope
 		}
 	}
 
-	int32 FCollisionShape::FindOrAddVertex(FVector Vertex)
+	int32 FRopeCollisionShape::FindOrAddVertex(FVector Vertex)
 	{
 		auto DistancePredicate = [&](const FVector& Target)
 			{
@@ -96,12 +97,12 @@ namespace TautRope
 		}
 		return VertIndex;
 	};
-	int32 FCollisionShape::AddUniqueEdge(int32 V1, int32 V2)
+	int32 FRopeCollisionShape::AddUniqueEdge(int32 V1, int32 V2)
 	{
 		return Edges.AddUnique((V1 < V2) ? FIntVector2(V1, V2) : FIntVector2(V2, V1));
 	};
 
-	int32 FCollisionShape::AddUniqueTriangle(int32 V1, int32 V2, int32 V3)
+	int32 FRopeCollisionShape::AddUniqueTriangle(int32 V1, int32 V2, int32 V3, TArray<FIntVector>& InOutTriangles) const
 	{
 		int32 ExistingIndex = INDEX_NONE;
 		const FIntVector Variants[6] = {
@@ -111,10 +112,39 @@ namespace TautRope
 		};
 		for (const FIntVector& T : Variants)
 		{
-			ExistingIndex = Triangles.IndexOfByKey(T);
+			ExistingIndex = InOutTriangles.IndexOfByKey(T);
 			if (ExistingIndex != INDEX_NONE)
+			{
 				return ExistingIndex;
+			}
 		}
-		return Triangles.Add(Variants[0]);
+		return InOutTriangles.Add(Variants[0]);
 	}
+
+#if TAUT_ROPE_DEBUG_DRAWING
+	void FRopeCollisionShape::DrawDebug(const UWorld* World) const
+	{
+		for (const FIntVector2& Edge : Edges)
+		{
+			const FVector EdgeVertA = Vertices[Edge.X];
+			const FVector EdgeVertB = Vertices[Edge.Y];
+			DrawDebugLine(
+				World
+				, Vertices[Edge.X]
+				, Vertices[Edge.Y]
+				, FColor::Blue
+			);
+		}
+		for (const FVector& Vert : Vertices)
+		{
+			DrawDebugSphere(
+				World
+				, Vert
+				, 5.f
+				, 4
+				, FColor::Red
+			);
+		}
+	}
+#endif // TAUT_ROPE_DEBUG_DRAWING
 }

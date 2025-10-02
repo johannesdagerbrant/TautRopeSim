@@ -29,7 +29,7 @@ namespace TautRope
 		, const FVector& OriginLocationB
 		, const FVector& TargetLocationA
 		, const FVector& TargetLocationB
-		, const TArray<FCollisionShape>& Shapes
+		, const TArray<FRopeCollisionShape>& Shapes
 		, const int32 RopePointIndex
 	);
 
