@@ -110,7 +110,6 @@ namespace TautRope
 			for (const int32 AdjacentEdgeIndex : Shape.VertToEdges[PointB.VertIndex])
 			{
 				const FIntVector2& AdjacentEdge = Shape.Edges[AdjacentEdgeIndex];
-				const FQuat& EdgeRotation = Shape.EdgeRotations[PointB.EdgeIndex];
 				const FVector& AdjacentEdgeVertA = Shape.Vertices[AdjacentEdge.X];
 				const FVector& OtherEndLocation = PointB.VertIndex == AdjacentEdge.X ? Shape.Vertices[AdjacentEdge.Y] : Shape.Vertices[AdjacentEdge.X];
 				const FVector EdgeDir = OtherEndLocation - VertexLocation;

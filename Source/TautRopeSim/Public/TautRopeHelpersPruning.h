@@ -6,9 +6,9 @@
 namespace TautRope
 {
 	bool IsRopeWrappingEdge(
-		const FVector PointLocationA
-		, const FVector PointLocationB
-		, const FVector PointLocationC
+		const FVector& PointLocationA
+		, const FVector& PointLocationB
+		, const FVector& PointLocationC
 		, const FQuat& EdgeRotation
 	);
 
