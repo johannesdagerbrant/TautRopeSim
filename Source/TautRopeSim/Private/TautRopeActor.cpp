@@ -95,15 +95,22 @@ void ATautRopeActor::BeginPlay()
 		FCollisionShape::MakeSphere(SearchRadius)
     );
 
-	NearbyShapes.Empty();
-    for (const FOverlapResult& Result : Overlaps)
-    {
-        UPrimitiveComponent* PrimComp = Result.Component.Get();
-        if (!IsValid(PrimComp))
-            continue;
+	TArray<UPrimitiveComponent*> PrimComponents;
+	PrimComponents.Reserve(Overlaps.Num());
+	for (const FOverlapResult& Result : Overlaps)
+	{
+		UPrimitiveComponent* PrimComp = Result.Component.Get();
+		if (IsValid(PrimComp))
+		{
+			PrimComponents.Add(PrimComp);
+		}
+	}
 
-        UBodySetup* BodySetup = nullptr;
-		UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(PrimComp);
+	NearbyShapes.Empty();
+    for (UPrimitiveComponent* PrimComp : PrimComponents)
+    {
+        const UBodySetup* BodySetup = nullptr;
+		const UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(PrimComp);
         if (IsValid(StaticMeshComponent))
         {
             if (StaticMeshComponent->GetStaticMesh())
@@ -113,17 +120,19 @@ void ATautRopeActor::BeginPlay()
         }
         else
         {
-            BodySetup = PrimComp->GetBodySetup();
+			// There is no const verson of GetBodySetup for UPrimitiveComponent
+			UPrimitiveComponent* WritablePrimComp = const_cast<UPrimitiveComponent*>(PrimComp);
+            BodySetup = WritablePrimComp->GetBodySetup();
         }
-
 		if (!IsValid(BodySetup))
 		{
 			continue;
 		}
-		const FTransform& CompTransform = PrimComp->GetComponentTransform();
+		TArray<UPrimitiveComponent*> OtherPrimComponents = TArray(PrimComponents);
+		OtherPrimComponents.Remove(PrimComp);
         for (const FKConvexElem& Convex : BodySetup->AggGeom.ConvexElems)
         {
-			TautRope::FRopeCollisionShape Shape = TautRope::FRopeCollisionShape(Convex, CompTransform);
+			TautRope::FRopeCollisionShape Shape = TautRope::FRopeCollisionShape(Convex, PrimComp, OtherPrimComponents);
 			NearbyShapes.Add(MoveTemp(Shape));
         }
     }
@@ -138,12 +147,12 @@ void ATautRopeActor::BeginPlay()
 void ATautRopeActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
+	/*
 	TArray<FVector> TargetPoints = MovementPhase();
 	CollisionPhase(TargetPoints);
 	VertexPhase();
 	PruningPhase();
-
+	*/
 #if TAUT_ROPE_DEBUG_DRAWING
 	DrawDebug();
 #endif // TAUT_ROPE_DEBUG_DRAWING
