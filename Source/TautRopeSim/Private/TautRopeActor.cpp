@@ -178,14 +178,18 @@ TArray<FVector> ATautRopeActor::MovementPhase()
 	constexpr float MinDistSum = 0.1f;
 	while (Itr < TAUT_ROPE_MAX_MOVEMENT_ITERATIONS && DistSum > MinDistSum)
 	{
-		// TODO: Grouping of rope points that belong to the same vertex fan of edges so we can draw a straight line across pultiple edges in 2d space,
+		// TODO: Grouping of rope points that belong to the same vertex fan of edges so we can draw a straight line across multiple edges in 2d space,
 		DistSum = 0.f;
 		for (int32 i = 1; i < RopePoints.Num() - 1; ++i)
 		{
 			TautRope::FPoint& PointB = RopePoints[i];
 			if (PointB.VertIndex != INDEX_NONE)
 			{
-				continue;
+				const bool bIsCornerVertex = NearbyShapes[PointB.ShapeIndex].IsCornerVertex(PointB.VertIndex);
+				if (!bIsCornerVertex)
+				{
+					continue;
+				}
 			}
 			const FVector& LocationA = RopeTargetLocations[i - 1];
 			const FVector& LocationC = RopeTargetLocations[i + 1];
@@ -368,8 +372,8 @@ void ATautRopeActor::DrawDebugRope() const
 			}
 			DrawDebugLine(
 				GetWorld()
-				, RopePoints[i].Location + EdgeUpA * RopeDebugRadius
-				, RopePoints[i + 1].Location + EdgeUpB * RopeDebugRadius
+				, RopePoints[i].Location
+				, RopePoints[i + 1].Location
 				, FColor::Black
 				, false
 				, -1.f
@@ -379,7 +383,7 @@ void ATautRopeActor::DrawDebugRope() const
 		}
 		DrawDebugSphere(
 			GetWorld()
-			, RopePoints[i].Location + EdgeUpA * RopeDebugRadius
+			, RopePoints[i].Location
 			, RopeDebugRadius
 			, 8
 			, FColor::Black

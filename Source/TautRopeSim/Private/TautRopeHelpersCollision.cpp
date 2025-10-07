@@ -192,9 +192,7 @@ namespace TautRope
 		{
 			return false;
 		}
-		OutTautRopeHitData.T = T;
-		OutTautRopeHitData.Location = LineA + Dir * OutTautRopeHitData.T;
-		OutTautRopeHitData.Distance = Dir.Size() * OutTautRopeHitData.T;
+		OutTautRopeHitData.Location = LineA + Dir * T;
 		const float W = 1.0f - U - V;
 		OutTautRopeHitData.BaryCoords = FVector(W, U, V);
 

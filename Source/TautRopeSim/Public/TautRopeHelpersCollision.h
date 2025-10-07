@@ -14,8 +14,6 @@ namespace TautRope
 		FVector Location = FVector::ZeroVector;
 		int32 ShapeIndex = INDEX_NONE;
 		int32 EdgeIndex = INDEX_NONE;
-		float T = 0.f;
-		float Distance = 0.f;
 		FVector BaryCoords = FVector::ZeroVector;
 	};
 
