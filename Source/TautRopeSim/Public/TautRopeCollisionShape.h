@@ -15,12 +15,22 @@ namespace TautRope
 			, const TArray<UPrimitiveComponent*>& OtherPrimComps
 		);
 
+		// If a vertex has more than one adjacent edge. 
+		// OBS: VertexIndex is asumed to be in valid range of Vertices array.
+		FORCEINLINE bool IsCornerVertex(const int32 VertexIndex) const
+		{
+			return IsCornerVertexList[VertexIndex];
+		};
+
 		TArray<FVector> Vertices;
 		TArray<FIntVector2>	Edges;
 		TArray<TArray<int32>> VertToEdges;
 		TArray<FQuat> EdgeRotations;
 
 	private:
+		TBitArray<> IsCornerVertexList;
+
+
 		FRopeCollisionShape(
 			const FKConvexElem& Convex
 			, const FTransform& CompTransform
@@ -28,11 +38,10 @@ namespace TautRope
 
 		void PopulateVertToEdges();
 
-		int32 RaycastAlongIntactShapeEdges(
+		void RaycastAlongIntactShapeEdges(
 			const FRopeCollisionShape& IntactShape
 			, const TArray<UPrimitiveComponent*>& OtherPrimComps
-			, TArray<TArray<float>>& OutRayDistancesFromVertices
-			, TBitArray<>& OutVerticesInsideOtherShape
+			, TArray<FVector2f>& OutEdgeRayDistances
 		) const;
 
 		int32 FindOrAddVertex(const FVector& NewVert, TArray<FVector>& Verts) const;

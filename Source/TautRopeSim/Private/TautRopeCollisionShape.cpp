@@ -69,6 +69,8 @@ namespace TautRope
 			const FVector Up = TriangleNormalSum.GetSafeNormal();
 			EdgeRotations[EdgeIndex] = FRotationMatrix::MakeFromXZ(Forward, Up).ToQuat();
 		}
+
+		IsCornerVertexList.Init(false, Vertices.Num());
 	};
 
 	void FRopeCollisionShape::PopulateVertToEdges()
@@ -95,151 +97,99 @@ namespace TautRope
     )
 	{
 		FRopeCollisionShape IntactShape(Convex, PrimComp->GetComponentTransform());
-		TArray<TArray<float>> RayDistancesFromVertices;
-		TBitArray<> VerticesInsideOtherShape;
-		const int32 NumNewVerts = RaycastAlongIntactShapeEdges(IntactShape, OtherPrimComps, RayDistancesFromVertices, VerticesInsideOtherShape);
+		TArray<FVector2f> EdgeRayDistances;
+		RaycastAlongIntactShapeEdges(IntactShape, OtherPrimComps, EdgeRayDistances);
 
-		if (NumNewVerts == 0 && !VerticesInsideOtherShape.Contains(true))
+		for (int32 EdgeIndex = 0; EdgeIndex < IntactShape.Edges.Num(); ++EdgeIndex)
 		{
-			*this = MoveTemp(IntactShape);
-			return;
-		}
-
-		Vertices = IntactShape.Vertices;
-		Edges = IntactShape.Edges;
-		EdgeRotations = IntactShape.EdgeRotations;
-
-		const int32 NumIntactShapeVerts = IntactShape.Vertices.Num();
-		for (int32 VertIndex = 0; VertIndex < NumIntactShapeVerts; ++VertIndex)
-		{
-			if (VerticesInsideOtherShape[VertIndex])
+			const FIntVector2& IntactEdge = IntactShape.Edges[EdgeIndex];
+			FVector2f& EdgeRayDistance = EdgeRayDistances[EdgeIndex];
+			const FQuat& EdgeRotation = IntactShape.EdgeRotations[EdgeIndex];
+			if (EdgeRayDistance.X == FLT_MAX) // No ray intersection, keep edge intact
 			{
-				continue; // Skip vertices inside other shape
+				ensure(EdgeRayDistance.Y == FLT_MAX);
+				const int32 VertIndexA = FindOrAddVertex(IntactShape.Vertices[IntactEdge.X], Vertices);
+				const int32 VertIndexB = FindOrAddVertex(IntactShape.Vertices[IntactEdge.Y], Vertices);
+				Edges.Add(FIntVector2(VertIndexA, VertIndexB));
+				EdgeRotations.Add(EdgeRotation);
+				continue;
+			}
+			const FVector& IntactVertA = IntactShape.Vertices[IntactEdge.X];
+			const FVector& IntactVertB = IntactShape.Vertices[IntactEdge.Y];
+			const FVector DirectionAB = (IntactVertB - IntactVertA).GetSafeNormal();
+
+			if (EdgeRayDistance.X > 0.f) // If vert A is not inside other shape.
+			{
+				const FVector NewVertB = IntactVertA + DirectionAB * EdgeRayDistance.X;
+				const int32 VertIndexA = FindOrAddVertex(IntactVertA, Vertices);
+				const int32 VertIndexB = FindOrAddVertex(NewVertB, Vertices);
+				Edges.Add(FIntVector2(VertIndexA, VertIndexB));
+				EdgeRotations.Add(EdgeRotation);
 			}
 
-			const TArray<int32>& AttachedEdges = IntactShape.VertToEdges[VertIndex];
-			const TArray<float>& RayDistances = RayDistancesFromVertices[VertIndex];
-
-			ensure(AttachedEdges.Num() == RayDistances.Num());
-
-			for (int32 i = 0; i < AttachedEdges.Num(); ++i)
+			if (EdgeRayDistance.Y > 0.f) // If vert B is not inside other shape.
 			{
-				const float& RayDistance = RayDistances[i];
-				if (RayDistance == FLT_MAX)
-				{
-					continue; // Keep edge intact
-				}
-
-				const int32 EdgeIndex = AttachedEdges[i];
-				const FIntVector2& Edge = IntactShape.Edges[EdgeIndex];
-				const int32 OtherVertIndex = (Edge.X == VertIndex) ? Edge.Y : Edge.X;
-
-				const FVector& Start = IntactShape.Vertices[VertIndex];
-				const FVector& End = IntactShape.Vertices[OtherVertIndex];
-				const FVector NewVertPos = Start + (End - Start).GetSafeNormal() * RayDistance;
-				const int32 NewVertIndex = Vertices.Add(NewVertPos);
-
-				// Update the edge to connect to the new vertex instead of the original other vertex
-				if (Edge.X == OtherVertIndex)
-				{
-					Edges[EdgeIndex].X = NewVertIndex;
-				}
-				else
-				{
-					Edges[EdgeIndex].Y = NewVertIndex;
-				}
+				const FVector NewVertA = IntactVertB - DirectionAB * EdgeRayDistance.Y;
+				const int32 VertIndexA = FindOrAddVertex(NewVertA, Vertices);
+				const int32 VertIndexB = FindOrAddVertex(IntactVertB, Vertices);
+				Edges.Add(FIntVector2(VertIndexA, VertIndexB));
+				EdgeRotations.Add(EdgeRotation);
 			}
 		}
-		// Remove edges where both vertices are inside other shape
-		for (int32 i = Edges.Num() - 1; i >= 0; --i)
-		{
-			const FIntVector2& Edge = Edges[i];
-
-			if (
-				Edge.X < NumIntactShapeVerts 
-				&& VerticesInsideOtherShape[Edge.X] 
-				&& Edge.Y < NumIntactShapeVerts 
-				&& VerticesInsideOtherShape[Edge.Y]
-			)
-			{
-				Edges.RemoveAt(i);
-				EdgeRotations.RemoveAt(i);
-			}
-		}
-		/*
-		// Remove vertices that are inside other shape
-		// TODO: Make edges adjust to these vertices getting removed
-		for (int32 i = NumIntactShapeVerts - 1; i >= 0; --i)
-		{
-			if (VerticesInsideOtherShape[i])
-			{
-				Vertices.RemoveAt(i);
-			}
-		}
-		*/
 		PopulateVertToEdges();
+
+		IsCornerVertexList.Init(false, Vertices.Num());
+		for (int32 VertexIndex = 0; VertexIndex < Vertices.Num(); ++VertexIndex)
+		{
+			IsCornerVertexList[VertexIndex] = VertToEdges[VertexIndex].Num() < 2;
+		}
     };
 
-	int32 FRopeCollisionShape::RaycastAlongIntactShapeEdges(
+	void FRopeCollisionShape::RaycastAlongIntactShapeEdges(
 		const FRopeCollisionShape& IntactShape
 		, const TArray<UPrimitiveComponent*>& OtherPrimComps
-		, TArray<TArray<float>>& OutRayDistancesFromVertices
-		, TBitArray<>& OutVerticesInsideOtherShape
+		, TArray<FVector2f>& OutEdgeRayDistances
 	) const
 	{
-		const int32 NumVerts = IntactShape.Vertices.Num();
-		OutVerticesInsideOtherShape.Init(false, NumVerts);
-		OutRayDistancesFromVertices.SetNum(NumVerts);
-		for (int32 VertIndex = 0; VertIndex < NumVerts; ++VertIndex)
-		{
-			OutRayDistancesFromVertices[VertIndex].Init(FLT_MAX, IntactShape.VertToEdges[VertIndex].Num());
-		}
+		// FLT_MAX represents no ray-intersections
+		OutEdgeRayDistances.Init(FVector2f(FLT_MAX, FLT_MAX), IntactShape.Edges.Num());
 
 		FHitResult LatestHitResult;
 		FCollisionQueryParams TraceParams = FCollisionQueryParams();
-		int32 NumNewVerts = 0;
-		for (int32 VertIndex = 0; VertIndex < OutRayDistancesFromVertices.Num(); ++VertIndex)
+		for (int32 EdgeIndex = 0; EdgeIndex < IntactShape.Edges.Num(); ++EdgeIndex)
 		{
-			const TArray<int32>& AttachedEdges = IntactShape.VertToEdges[VertIndex];
-			TArray<float>& RayDistancesFromVertex = OutRayDistancesFromVertices[VertIndex];
-			const int32 NumRayDirections = RayDistancesFromVertex.Num();
-			ensure(NumRayDirections == AttachedEdges.Num());
-			for (int32 RayDirectionIndex = 0; RayDirectionIndex < NumRayDirections; ++RayDirectionIndex)
+			const FIntVector2& Edge = IntactShape.Edges[EdgeIndex];
+			FVector2f& EdgeRayDistance = OutEdgeRayDistances[EdgeIndex];
+			const FVector& VertA = IntactShape.Vertices[Edge.X];
+			const FVector& VertB = IntactShape.Vertices[Edge.Y];
+			for (UPrimitiveComponent* OtherPrimComp : OtherPrimComps)
 			{
-				float& RayDistance = RayDistancesFromVertex[RayDirectionIndex];
-				const int32 EdgeIndex = AttachedEdges[RayDirectionIndex];
-				const FIntVector2& Edge = IntactShape.Edges[EdgeIndex];
-				const int32 OtherVertIndex = (Edge.X == VertIndex) ? Edge.Y : Edge.X;
-				const FVector& Start = IntactShape.Vertices[VertIndex];
-				const FVector& End = IntactShape.Vertices[OtherVertIndex];
-				for (UPrimitiveComponent* OtherPrimComp : OtherPrimComps)
+				if (!OtherPrimComp->LineTraceComponent(LatestHitResult, VertA, VertB, TraceParams))
 				{
-					if (!OtherPrimComp->LineTraceComponent(LatestHitResult, Start, End, TraceParams))
-					{
-						continue;
-					}
-					if (LatestHitResult.bStartPenetrating || LatestHitResult.Distance < SMALL_NUMBER)
-					{
-						RayDistance = -1.f;
-						break;
-					}
-					if (LatestHitResult.Distance < RayDistance)
-					{
-						RayDistance = LatestHitResult.Distance;
-					}
+					continue;
 				}
-				if (RayDistance < 0.f)
+				if (LatestHitResult.bStartPenetrating || LatestHitResult.Distance < SMALL_NUMBER)
 				{
-					OutVerticesInsideOtherShape[VertIndex] = true;
-					break;
+					EdgeRayDistance.X = -1.f;
 				}
-				else if(RayDistance < FLT_MAX)
+				else if (LatestHitResult.Distance < EdgeRayDistance.X)
 				{
-					NumNewVerts++;
+					EdgeRayDistance.X = LatestHitResult.Distance;
+				}
+				if (!ensure(OtherPrimComp->LineTraceComponent(LatestHitResult, VertB, VertA, TraceParams)))
+				{
+					continue;
+				}
+				if (LatestHitResult.bStartPenetrating || LatestHitResult.Distance < SMALL_NUMBER)
+				{
+					EdgeRayDistance.Y = -1.f;
+				}
+				else if (LatestHitResult.Distance < EdgeRayDistance.Y)
+				{
+					EdgeRayDistance.Y = LatestHitResult.Distance;
 				}
 			}
 		}
-		return NumNewVerts;
 	};
 
 	int32 FRopeCollisionShape::FindOrAddVertex(const FVector& NewVert, TArray<FVector>& InOutVerts) const
@@ -302,7 +252,7 @@ namespace TautRope
 			DrawDebugSphere(
 				World
 				, Vert
-				, 5.f
+				, 2.f
 				, 4
 				, FColor::Red
 			);

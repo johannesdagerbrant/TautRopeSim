@@ -147,12 +147,12 @@ void ATautRopeActor::BeginPlay()
 void ATautRopeActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	/*
+
 	TArray<FVector> TargetPoints = MovementPhase();
 	CollisionPhase(TargetPoints);
 	VertexPhase();
 	PruningPhase();
-	*/
+
 #if TAUT_ROPE_DEBUG_DRAWING
 	DrawDebug();
 #endif // TAUT_ROPE_DEBUG_DRAWING
@@ -297,6 +297,12 @@ bool ATautRopeActor::PruningPhase()
 	{
 		if (RopePoints[i].VertIndex != INDEX_NONE)
 		{
+			const TautRope::FPoint& Point = RopePoints[i];
+			const TautRope::FRopeCollisionShape& Shape = NearbyShapes[Point.ShapeIndex];
+			if (Shape.IsCornerVertex(Point.VertIndex)) // The point is on a vertex with no other edge to slide onto. 
+			{
+				continue;
+			}
 			RopePoints.RemoveAt(i);
 		}
 	}
