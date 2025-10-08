@@ -17,6 +17,7 @@ namespace TautRope
 		const int32 RopePointIndex
 	)
 	{
+		OutHitData.BaryCoords = FVector(MAX_FLT);
 		// First perform triangle sweep for A-movement
 		for (int32 ShapeIndex = 0; ShapeIndex < Shapes.Num(); ++ShapeIndex)
 		{
@@ -48,6 +49,7 @@ namespace TautRope
 		// No new collisions from A-movement triangle sweep
 		InOutSegmentPointA.Location = TargetLocationA;
 
+		OutHitData.BaryCoords = FVector(MAX_FLT);
 		// Perform triangle sweep for B-movement
 		for (int32 ShapeIndex = 0; ShapeIndex < Shapes.Num(); ++ShapeIndex)
 		{
@@ -138,6 +140,7 @@ namespace TautRope
 			{
 				OutHitData.bIsHit = true;
 				OutHitData.Location = ClosestPointOnLine;
+				OutHitData.BaryCoords = BaryCoords;
 				OutHitData.bIsHitOnFirstTriangleSweep = bIsFirstTriangleSweep;
 				OutHitData.RopePointIndex = RopePointIndex;
 				OutHitData.EdgeIndex = EdgeIndex;
