@@ -73,23 +73,6 @@ namespace TautRope
 		IsCornerVertexList.Init(false, Vertices.Num());
 	};
 
-	void FRopeCollisionShape::PopulateVertToEdges()
-	{
-		VertToEdges.Reset(Vertices.Num());
-		VertToEdges.SetNum(Vertices.Num());
-		for (int32 VertIndex = 0; VertIndex < Vertices.Num(); ++VertIndex)
-		{
-			for (int32 EdgeIndex = 0; EdgeIndex < Edges.Num(); ++EdgeIndex)
-			{
-				const FIntVector2& Edge = Edges[EdgeIndex];
-				if (VertIndex == Edge.X || VertIndex == Edge.Y)
-				{
-					VertToEdges[VertIndex].Add(EdgeIndex);
-				}
-			}
-		}
-	}
-
     FRopeCollisionShape::FRopeCollisionShape(
        const FKConvexElem& Convex,
        const UPrimitiveComponent* PrimComp,
@@ -120,7 +103,7 @@ namespace TautRope
 
 			if (EdgeRayDistance.X > 0.f) // If vert A is not inside other shape.
 			{
-				const FVector NewVertB = IntactVertA + DirectionAB * EdgeRayDistance.X;
+				const FVector NewVertB = IntactVertA + DirectionAB * (EdgeRayDistance.X + TAUT_ROPE_DISTANCE_TOLERANCE);
 				const int32 VertIndexA = FindOrAddVertex(IntactVertA, Vertices);
 				const int32 VertIndexB = FindOrAddVertex(NewVertB, Vertices);
 				Edges.Add(FIntVector2(VertIndexA, VertIndexB));
@@ -129,7 +112,7 @@ namespace TautRope
 
 			if (EdgeRayDistance.Y > 0.f) // If vert B is not inside other shape.
 			{
-				const FVector NewVertA = IntactVertB - DirectionAB * EdgeRayDistance.Y;
+				const FVector NewVertA = IntactVertB - DirectionAB * (EdgeRayDistance.Y + TAUT_ROPE_DISTANCE_TOLERANCE);
 				const int32 VertIndexA = FindOrAddVertex(NewVertA, Vertices);
 				const int32 VertIndexB = FindOrAddVertex(IntactVertB, Vertices);
 				Edges.Add(FIntVector2(VertIndexA, VertIndexB));
@@ -144,6 +127,23 @@ namespace TautRope
 			IsCornerVertexList[VertexIndex] = VertToEdges[VertexIndex].Num() < 2;
 		}
     };
+
+	void FRopeCollisionShape::PopulateVertToEdges()
+	{
+		VertToEdges.Reset(Vertices.Num());
+		VertToEdges.SetNum(Vertices.Num());
+		for (int32 VertIndex = 0; VertIndex < Vertices.Num(); ++VertIndex)
+		{
+			for (int32 EdgeIndex = 0; EdgeIndex < Edges.Num(); ++EdgeIndex)
+			{
+				const FIntVector2& Edge = Edges[EdgeIndex];
+				if (VertIndex == Edge.X || VertIndex == Edge.Y)
+				{
+					VertToEdges[VertIndex].Add(EdgeIndex);
+				}
+			}
+		}
+	}
 
 	void FRopeCollisionShape::RaycastAlongIntactShapeEdges(
 		const FRopeCollisionShape& IntactShape
