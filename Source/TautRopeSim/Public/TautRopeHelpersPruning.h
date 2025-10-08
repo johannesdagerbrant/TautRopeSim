@@ -12,4 +12,12 @@ namespace TautRope
 		, const FQuat& EdgeRotation
 	);
 
+#if TAUT_ROPE_DEBUG_DRAWING
+	void DebugDrawPruningSweep(
+		const UWorld* World
+		, const FVector& LastPointLocation
+		, const FVector& RemovedPointLocation
+		, const FVector& NextPointLocation
+	);
+#endif // TAUT_ROPE_DEBUG_DRAWING
 }

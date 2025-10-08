@@ -317,6 +317,12 @@ bool ATautRopeActor::PruningPhase()
 			{
 				continue;
 			}
+#if TAUT_ROPE_DEBUG_DRAWING
+			if (CVarDrawDebugCollisionSweep.GetValueOnGameThread() != 0)
+			{
+				TautRope::DebugDrawPruningSweep(GetWorld(), RopePoints[i - 1].Location, RopePoints[i].Location, RopePoints[i + 1].Location);
+			}
+#endif // TAUT_ROPE_DEBUG_DRAWING
 			RopePoints.RemoveAt(i);
 		}
 	}
@@ -333,6 +339,12 @@ bool ATautRopeActor::PruningPhase()
 	{
 		if (PointsToRemove[i])
 		{
+#if TAUT_ROPE_DEBUG_DRAWING
+			if (CVarDrawDebugCollisionSweep.GetValueOnGameThread() != 0)
+			{
+				TautRope::DebugDrawPruningSweep(GetWorld(), RopePoints[i - 1].Location, RopePoints[i].Location, RopePoints[i + 1].Location);
+			}
+#endif // TAUT_ROPE_DEBUG_DRAWING
 			RopePoints.RemoveAt(i); 
 		}
 	}

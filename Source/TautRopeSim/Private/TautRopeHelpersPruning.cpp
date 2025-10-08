@@ -68,4 +68,32 @@ namespace TautRope
 		// If rope passes behind or through the edge plane → not wrapping
 		return AlongDown > -TAUT_ROPE_DISTANCE_TOLERANCE;
 	}
+
+#if TAUT_ROPE_DEBUG_DRAWING
+	void DebugDrawPruningSweep(
+		const UWorld* World
+		, const FVector& LastPointLocation
+		, const FVector& RemovedPointLocation
+		, const FVector& NextPointLocation
+	)
+	{
+		TArray<FVector> Vertices;
+		Vertices.Add(LastPointLocation);
+		Vertices.Add(RemovedPointLocation);
+		Vertices.Add(NextPointLocation);
+
+		TArray<int32> Indices;
+		// First triangle (OriginA, TargetA, OriginB)
+		Indices.Add(0); Indices.Add(1); Indices.Add(2);
+
+		DrawDebugMesh(
+			World,
+			Vertices,
+			Indices,
+			FColor::Magenta,
+			false,	// persistent lines
+			0.5f   // lifetime
+		);
+	}
+#endif // TAUT_ROPE_DEBUG_DRAWING
 }
