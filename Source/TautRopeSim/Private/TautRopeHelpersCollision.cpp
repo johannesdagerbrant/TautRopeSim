@@ -150,13 +150,13 @@ namespace TautRope
 	}
 
 	bool GetTriangleLineIntersection(
-		const FVector& TriA
-		, const FVector& TriB
-		, const FVector& TriC
-		, const FVector& LineA
-		, const FVector& LineB
-		, FVector& OutLocation
-		, FVector& OutBaryCoords
+		const FVector& TriA,
+		const FVector& TriB,
+		const FVector& TriC,
+		const FVector& LineA,
+		const FVector& LineB,
+		FVector& OutLocation,
+		FVector& OutBaryCoords
 	)
 	{
 		const FVector Dir = LineB - LineA;
@@ -168,34 +168,37 @@ namespace TautRope
 
 		if (FMath::Abs(Det) < KINDA_SMALL_NUMBER)
 		{
-			return false;
+			return false; // Line parallel to triangle
 		}
 
 		const float InvDet = 1.0f / Det;
 		const FVector TVec = LineA - TriA;
+
 		const float U = FVector::DotProduct(TVec, PVec) * InvDet;
-		if (U < 0.0f || U > 1.0f)
+		if (U < KINDA_SMALL_NUMBER || U > 1.0f)
 		{
 			return false;
 		}
 
 		const FVector QVec = FVector::CrossProduct(TVec, Edge1);
 		const float V = FVector::DotProduct(Dir, QVec) * InvDet;
-		if (V < 0.0f || U + V > 1.0f)
+		if (V < -KINDA_SMALL_NUMBER || U + V > 1.0f)
 		{
 			return false;
 		}
+
 		const float T = FVector::DotProduct(Edge2, QVec) * InvDet;
-		if (T >= 1.f || T <= 0.f)
+		if (T < -KINDA_SMALL_NUMBER || T > 1.f + KINDA_SMALL_NUMBER)
 		{
 			return false;
 		}
+
 		OutLocation = LineA + Dir * T;
 		const float W = 1.0f - U - V;
 		OutBaryCoords = FVector(W, U, V);
 
 		return true;
-	};
+	}
 
 #if TAUT_ROPE_DEBUG_DRAWING
 	void DebugDrawSweep(
@@ -207,7 +210,7 @@ namespace TautRope
 		, const FHitData& OutHitData
 	)
 	{
-		if (!OutHitData.bIsHit || (OriginLocationA == TargetLocationA && OriginLocationB == TargetLocationB))
+		if (OriginLocationA == TargetLocationA && OriginLocationB == TargetLocationB)
 		{
 			return;
 		}
@@ -223,11 +226,7 @@ namespace TautRope
 		// Second triangle (OriginB, TargetB, TargetA)
 		Indices.Add(2); Indices.Add(3); Indices.Add(1);
 
-		FColor MeshColor = FColor::Yellow;
-		if (OutHitData.bIsHit)
-		{
-			MeshColor = OutHitData.bIsHitOnFirstTriangleSweep ? FColor::Emerald : FColor::Red;
-		}
+		FColor MeshColor = OutHitData.bIsHit ? FColor::Red : FColor::Yellow;
 		DrawDebugMesh(
 			World,
 			Vertices,
@@ -236,8 +235,6 @@ namespace TautRope
 			false,	// persistent lines
 			0.5f   // lifetime
 		);
-		DrawDebugLine(World, TargetLocationA, TargetLocationB, FColor::White, false, 0.5f);
-		DrawDebugLine(World, TargetLocationA, OriginLocationB, FColor::White, false, 0.5f);
 	}
 #endif // TAUT_ROPE_DEBUG_DRAWING
 
