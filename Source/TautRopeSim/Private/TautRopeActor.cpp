@@ -42,6 +42,15 @@ static TAutoConsoleVariable<int32> CVarDrawDebugRopeShapes(
 	TEXT("1: On"),
 	ECVF_Cheat
 );
+
+static TAutoConsoleVariable<int32> CVarDrawDebugCollisionSweep(
+	TEXT("TautRope.DrawDebugCollisionSweep"),
+	0,
+	TEXT("Draw sweep debug visualization.\n")
+	TEXT("0: Off\n")
+	TEXT("1: On"),
+	ECVF_Cheat
+);
 #endif // TAUT_ROPE_DEBUG_DRAWING
 
 ATautRopeActor::ATautRopeActor()
@@ -172,56 +181,44 @@ TArray<FVector> ATautRopeActor::MovementPhase()
 	{
 		RopeTargetLocations[i] = RopePoints[i].Location;
 	}
-
-	int32 Itr = 0;
-	float DistSum = FLT_MAX;
-	constexpr float MinDistSum = 0.1f;
-	while (Itr < TAUT_ROPE_MAX_MOVEMENT_ITERATIONS && DistSum > MinDistSum)
+	// TODO: Grouping of rope points that belong to the same vertex fan of edges so we can draw a straight line across multiple edges in 2d space,
+	for (int32 i = 1; i < RopePoints.Num() - 1; ++i)
 	{
-		// TODO: Grouping of rope points that belong to the same vertex fan of edges so we can draw a straight line across multiple edges in 2d space,
-		DistSum = 0.f;
-		for (int32 i = 1; i < RopePoints.Num() - 1; ++i)
+		TautRope::FPoint& PointB = RopePoints[i];
+		if (PointB.VertIndex != INDEX_NONE)
 		{
-			TautRope::FPoint& PointB = RopePoints[i];
-			if (PointB.VertIndex != INDEX_NONE)
+			const bool bIsCornerVertex = NearbyShapes[PointB.ShapeIndex].IsCornerVertex(PointB.VertIndex);
+			if (!bIsCornerVertex)
 			{
-				const bool bIsCornerVertex = NearbyShapes[PointB.ShapeIndex].IsCornerVertex(PointB.VertIndex);
-				if (!bIsCornerVertex)
-				{
-					continue;
-				}
+				continue;
 			}
-			const FVector& LocationA = RopeTargetLocations[i - 1];
-			const FVector& LocationC = RopeTargetLocations[i + 1];
-			const TautRope::FRopeCollisionShape& Shape = NearbyShapes[PointB.ShapeIndex];
-			const FIntVector2& Edge = Shape.Edges[PointB.EdgeIndex];
-			const FVector& EdgeVertA = Shape.Vertices[Edge.X];
-			const FVector& EdgeVertB = Shape.Vertices[Edge.Y];
-			float OutDistAlongEdge = 0.f;
-			float OutEdgeLength = 0.f;
-			const FVector PrevRopeTargetLocation = RopeTargetLocations[i];
-			const FVector RopeTargetLocation = TautRope::FindMinDistancePointBetweenABOnLineXY(LocationA, LocationC, EdgeVertA, EdgeVertB, OutDistAlongEdge, OutEdgeLength);
-			if (OutDistAlongEdge < TAUT_ROPE_DISTANCE_TOLERANCE)
-			{
-				PointB.VertIndex = Edge.X;
-				RopeTargetLocations[i] = EdgeVertA;
-			}
-			else if (OutDistAlongEdge > OutEdgeLength - TAUT_ROPE_DISTANCE_TOLERANCE)
-			{
-				PointB.VertIndex = Edge.Y;
-				RopeTargetLocations[i] = EdgeVertB;
-			}
-			else
-			{
-				PointB.VertIndex = INDEX_NONE;
-				RopeTargetLocations[i] = RopeTargetLocation;
-			}
-			DistSum += FVector::Dist(RopeTargetLocations[i], PrevRopeTargetLocation);
-
 		}
-		Itr++;
+		const FVector& LocationA = RopeTargetLocations[i - 1];
+		const FVector& LocationC = RopeTargetLocations[i + 1];
+		const TautRope::FRopeCollisionShape& Shape = NearbyShapes[PointB.ShapeIndex];
+		const FIntVector2& Edge = Shape.Edges[PointB.EdgeIndex];
+		const FVector& EdgeVertA = Shape.Vertices[Edge.X];
+		const FVector& EdgeVertB = Shape.Vertices[Edge.Y];
+		float OutDistAlongEdge = 0.f;
+		float OutEdgeLength = 0.f;
+		const FVector PrevRopeTargetLocation = RopeTargetLocations[i];
+		const FVector RopeTargetLocation = TautRope::FindMinDistancePointBetweenABOnLineXY(LocationA, LocationC, EdgeVertA, EdgeVertB, OutDistAlongEdge, OutEdgeLength);
+		if (OutDistAlongEdge < TAUT_ROPE_DISTANCE_TOLERANCE)
+		{
+			PointB.VertIndex = Edge.X;
+			RopeTargetLocations[i] = EdgeVertA;
+		}
+		else if (OutDistAlongEdge > OutEdgeLength - TAUT_ROPE_DISTANCE_TOLERANCE)
+		{
+			PointB.VertIndex = Edge.Y;
+			RopeTargetLocations[i] = EdgeVertB;
+		}
+		else
+		{
+			PointB.VertIndex = INDEX_NONE;
+			RopeTargetLocations[i] = RopeTargetLocation;
+		}
 	}
-
 	return RopeTargetLocations;
 }
 
@@ -262,6 +259,19 @@ bool ATautRopeActor::CollisionPhase(TArray<FVector>& TargetRopePoints)
 				}
 				SegmentSweepHits.Add(MoveTemp(HitData));
 			}
+#if TAUT_ROPE_DEBUG_DRAWING
+			if (CVarDrawDebugCollisionSweep.GetValueOnGameThread() != 0)
+			{
+				TautRope::DebugDrawSweep(
+					GetWorld()
+					, OriginLocationA
+					, OriginLocationB
+					, TargetLocationA
+					, TargetLocationB
+					, HitData
+				);
+			}
+#endif // TAUT_ROPE_DEBUG_DRAWING
 		}
 		for (int32 i = SegmentSweepHits.Num() - 1; i >= 0; --i)
 		{
@@ -351,7 +361,7 @@ void ATautRopeActor::DrawDebug() const
 
 void ATautRopeActor::DrawDebugRope() const
 {
-	constexpr float RopeDebugRadius = 0.5f;
+	constexpr float RopeDebugRadius = 1.5f;
 	// Draw rope segments
 	for (int32 i = 0; i < RopePoints.Num(); ++i)
 	{

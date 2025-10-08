@@ -9,6 +9,11 @@ namespace TautRope
 {
 	struct TAUTROPESIM_API FRopeCollisionShape
 	{
+	public:
+		FRopeCollisionShape(
+			const FKConvexElem& Convex
+			, const FTransform& CompTransform
+		);
 		FRopeCollisionShape(
 			const FKConvexElem& Convex
 			, const UPrimitiveComponent* PrimComp
@@ -29,12 +34,6 @@ namespace TautRope
 
 	private:
 		TBitArray<> IsCornerVertexList;
-
-
-		FRopeCollisionShape(
-			const FKConvexElem& Convex
-			, const FTransform& CompTransform
-		);
 
 		void PopulateVertToEdges();
 

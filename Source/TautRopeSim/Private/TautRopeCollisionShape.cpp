@@ -32,9 +32,10 @@ namespace TautRope
 			AddUniqueTriangle(ShapeVertIndexA, ShapeVertIndexB, ShapeVertIndexC, Triangles);
 		}
 
+		const FTransform ConvexTransform = Convex.GetTransform() * CompTransform;
 		for (FVector& Vert : Vertices)
 		{
-			Vert = CompTransform.TransformPosition(Vert);
+			Vert = ConvexTransform.TransformPosition(Vert);
 		}
 
 		TMap<int32, TArray<FIntVector>> EdgeIndexToTriangles;
@@ -198,7 +199,7 @@ namespace TautRope
 			{
 				return [&](const FVector& V)
 					{
-						return FVector::DistSquared(V, Target) <= TAUT_ROPE_DISTANCE_TOLERANCE_SQUARED;
+						return FVector::DistSquared(V, Target) <= TAUT_ROPE_SHAPE_MERGE_VERTEX_THRESHOLD_SQUARED;
 					};
 			};
 		int32 VertIndex = InOutVerts.IndexOfByPredicate(DistancePredicate(NewVert));
@@ -236,26 +237,45 @@ namespace TautRope
 #if TAUT_ROPE_DEBUG_DRAWING
 	void FRopeCollisionShape::DrawDebug(const UWorld* World) const
 	{
-		for (const FIntVector2& Edge : Edges)
+		for (int32 EdgeIndex = 0; EdgeIndex < Edges.Num(); ++EdgeIndex)
 		{
+			const FIntVector2& Edge = Edges[EdgeIndex];
 			const FVector EdgeVertA = Vertices[Edge.X];
 			const FVector EdgeVertB = Vertices[Edge.Y];
 			DrawDebugLine(
 				World
-				, Vertices[Edge.X]
-				, Vertices[Edge.Y]
+				, EdgeVertA
+				, EdgeVertB
 				, FColor::Blue
 			);
+
+			const FVector Center = (EdgeVertA + EdgeVertB) * 0.5f;
+			DrawDebugLine(
+				World
+				, Center
+				, Center + EdgeRotations[EdgeIndex].GetUpVector() * 5.f
+				, FColor::Yellow
+			);
 		}
-		for (const FVector& Vert : Vertices)
+		for (int32 VertIndex = 0; VertIndex < Vertices.Num(); ++VertIndex)
 		{
+			const FVector& Vert = Vertices[VertIndex];
 			DrawDebugSphere(
 				World
 				, Vert
-				, 2.f
+				, 1.f
 				, 4
 				, FColor::Red
 			);
+			for (int32 EdgeIndex : VertToEdges[VertIndex])
+			{
+				DrawDebugLine(
+					World
+					, Vert
+					, Vert + EdgeRotations[EdgeIndex].GetUpVector() * 5.f
+					, FColor::Yellow
+				);
+			}
 		}
 	};
 #endif // TAUT_ROPE_DEBUG_DRAWING

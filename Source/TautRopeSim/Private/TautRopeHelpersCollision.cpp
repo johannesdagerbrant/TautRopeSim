@@ -6,151 +6,145 @@
 namespace TautRope
 {
 	void SweepSegmentThroughShapes(
-		FHitData& OutHitData
-		, FPoint& InOutSegmentPointA
-		, FPoint& InOutSegmentPointB
-		, const FVector& OriginLocationA
-		, const FVector& OriginLocationB
-		, const FVector& TargetLocationA
-		, const FVector& TargetLocationB
-		, const TArray<FRopeCollisionShape>& Shapes
-		, const int32 RopePointIndex
+		FHitData& OutHitData,
+		FPoint& InOutSegmentPointA,
+		FPoint& InOutSegmentPointB,
+		const FVector& OriginLocationA,
+		const FVector& OriginLocationB,
+		const FVector& TargetLocationA,
+		const FVector& TargetLocationB,
+		const TArray<FRopeCollisionShape>& Shapes,
+		const int32 RopePointIndex
 	)
 	{
-		float LowestBaryU = FLT_MAX;
 		// First perform triangle sweep for A-movement
 		for (int32 ShapeIndex = 0; ShapeIndex < Shapes.Num(); ++ShapeIndex)
 		{
-			// TODO: for performance, early-out when AABB checks fail between segment (A,B,TargetA,TargetB) and shape.
-
 			const FRopeCollisionShape& Shape = Shapes[ShapeIndex];
-			for (int32 EdgeIndex = 0; EdgeIndex < Shape.Edges.Num(); ++EdgeIndex)
-			{
-				if (ShapeIndex == InOutSegmentPointA.ShapeIndex)
-				{
-					if (EdgeIndex == InOutSegmentPointA.EdgeIndex)
-					{
-						continue;
-					}
-					if (InOutSegmentPointA.VertIndex != INDEX_NONE)
-					{
-						if (Shape.VertToEdges[InOutSegmentPointA.VertIndex].Contains(EdgeIndex))
-						{
-							continue;
-						}
-					}
-				}
-				if (ShapeIndex == InOutSegmentPointB.ShapeIndex)
-				{
-					if (EdgeIndex == InOutSegmentPointB.EdgeIndex)
-					{
-						continue;
-					}
-					if (InOutSegmentPointB.VertIndex != INDEX_NONE)
-					{
-						if (Shape.VertToEdges[InOutSegmentPointB.VertIndex].Contains(EdgeIndex))
-						{
-							continue;
-						}
-					}
-				}
-				const FIntVector2& EdgeVerts = Shape.Edges[EdgeIndex];
-				const FVector& EdgeA = Shape.Vertices[EdgeVerts.X];
-				const FVector& EdgeB = Shape.Vertices[EdgeVerts.Y];
-				FHitData HitData = FHitData();
-				const bool bIsIntersection = GetTriangleLineIntersection(OriginLocationA, TargetLocationA, OriginLocationB, EdgeA, EdgeB, HitData);
-				if (!bIsIntersection)
-				{
-					continue;
-				}
-				if (HitData.BaryCoords.Y >= LowestBaryU)
-				{
-					continue;
-				}
-				LowestBaryU = HitData.BaryCoords.Y;
-				HitData.EdgeIndex = EdgeIndex;
-				HitData.bIsHit = true;
-				HitData.bIsHitOnFirstTriangleSweep = true;
-				HitData.ShapeIndex = ShapeIndex;
-				HitData.RopePointIndex = RopePointIndex;
-				OutHitData = HitData;
-			}
+			SweepTriangleAgainstShape(
+				OriginLocationA,	// TriA
+				TargetLocationA,	// TriB
+				OriginLocationB,	// TriC
+				Shapes[ShapeIndex],
+				ShapeIndex,
+				InOutSegmentPointA.ShapeIndex,	// ShapeIndexPointA
+				InOutSegmentPointB.ShapeIndex,	// ShapeIndexPointB
+				InOutSegmentPointA.EdgeIndex,	// EdgeIndexPointA
+				InOutSegmentPointB.EdgeIndex,	// EdgeIndexPointB
+				InOutSegmentPointA.VertIndex,	// VertIndexPointA
+				InOutSegmentPointB.VertIndex,	// VertIndexPointB
+				RopePointIndex,
+				true,	// bIsFirstTriangleSweep
+				OutHitData
+			);
 		}
+
 		if (OutHitData.bIsHit)
 		{
-			InOutSegmentPointA.Location = FMath::Lerp(OriginLocationA, TargetLocationA, LowestBaryU);
+			InOutSegmentPointA.Location = FMath::Lerp(OriginLocationA, TargetLocationA, OutHitData.BaryCoords.Y);
 			return;
 		}
-		// No new collisions from A-movement triangle sweep: Set new A to equal target A
+
+		// No new collisions from A-movement triangle sweep
 		InOutSegmentPointA.Location = TargetLocationA;
 
 		// Perform triangle sweep for B-movement
-		LowestBaryU = FLT_MAX;
 		for (int32 ShapeIndex = 0; ShapeIndex < Shapes.Num(); ++ShapeIndex)
 		{
-			// TODO: for performance, early-out on cached bitarray of AABB checks from A-movement above.
-
 			const FRopeCollisionShape& Shape = Shapes[ShapeIndex];
-			for (int32 EdgeIndex = 0; EdgeIndex < Shape.Edges.Num(); ++EdgeIndex)
-			{
-				if (ShapeIndex == InOutSegmentPointA.ShapeIndex)
-				{
-					if (EdgeIndex == InOutSegmentPointA.EdgeIndex)
-					{
-						continue;
-					}
-					if (InOutSegmentPointA.VertIndex != INDEX_NONE)
-					{
-						if (Shape.VertToEdges[InOutSegmentPointA.VertIndex].Contains(EdgeIndex))
-						{
-							continue;
-						}
-					}
-				}
-				if (ShapeIndex == InOutSegmentPointB.ShapeIndex)
-				{
-					if (EdgeIndex == InOutSegmentPointB.EdgeIndex)
-					{
-						continue;
-					}
-					if (InOutSegmentPointB.VertIndex != INDEX_NONE)
-					{
-						if (Shape.VertToEdges[InOutSegmentPointB.VertIndex].Contains(EdgeIndex))
-						{
-							continue;
-						}
-					}
-				}
-				const FIntVector2& EdgeVerts = Shape.Edges[EdgeIndex];
-				const FVector& EdgeA = Shape.Vertices[EdgeVerts.X];
-				const FVector& EdgeB = Shape.Vertices[EdgeVerts.Y];
-				FHitData HitData = FHitData();
-				const bool bIsIntersection = GetTriangleLineIntersection(OriginLocationB, TargetLocationB, TargetLocationA, EdgeA, EdgeB, HitData);
-				if (!bIsIntersection)
-				{
-					continue;
-				}
-				if (HitData.BaryCoords.Y >= LowestBaryU)
-				{
-					continue;
-				}
-				LowestBaryU = HitData.BaryCoords.Y;
-				HitData.EdgeIndex = EdgeIndex;
-				HitData.bIsHit = true;
-				HitData.bIsHitOnFirstTriangleSweep = false;
-				HitData.ShapeIndex = ShapeIndex;
-				HitData.RopePointIndex = RopePointIndex;
-				OutHitData = HitData;
-			}
+			SweepTriangleAgainstShape(
+				OriginLocationB,	// TriA
+				TargetLocationB,	// TriB
+				TargetLocationA,	// TriC
+				Shape,
+				ShapeIndex,
+				InOutSegmentPointA.ShapeIndex,	// ShapeIndexPointA
+				InOutSegmentPointB.ShapeIndex,	// ShapeIndexPointB
+				InOutSegmentPointA.EdgeIndex,	// EdgeIndexPointA
+				InOutSegmentPointB.EdgeIndex,	// EdgeIndexPointB
+				InOutSegmentPointA.VertIndex,	// VertIndexPointA
+				InOutSegmentPointB.VertIndex,	// VertIndexPointB
+				RopePointIndex,
+				false,	// bIsFirstTriangleSweep
+				OutHitData
+			);
 		}
+
 		if (OutHitData.bIsHit)
 		{
-			InOutSegmentPointB.Location = FMath::Lerp(OriginLocationB, TargetLocationB, LowestBaryU);
+			InOutSegmentPointB.Location = FMath::Lerp(OriginLocationB, TargetLocationB, OutHitData.BaryCoords.Y);
 			return;
 		}
-		// No new collisions from B-movement triangle sweep: Set new B to equal target B
+
+		// No new collisions from B-movement triangle sweep
 		InOutSegmentPointB.Location = TargetLocationB;
-	};
+	}
+
+
+	void SweepTriangleAgainstShape(
+		const FVector& TriA,
+		const FVector& TriB,
+		const FVector& TriC,
+		const FRopeCollisionShape& Shape,
+		const int32 ShapeIndex,
+		const int32 ShapeIndexPointA,
+		const int32 ShapeIndexPointB,
+		const int32 EdgeIndexPointA,
+		const int32 EdgeIndexPointB,
+		const int32 VertIndexPointA,
+		const int32 VertIndexPointB,
+		const int32 RopePointIndex,
+		const bool bIsFirstTriangleSweep,
+		FHitData& OutHitData
+	)
+	{
+		for (int32 EdgeIndex = 0; EdgeIndex < Shape.Edges.Num(); ++EdgeIndex)
+		{
+			if (ShapeIndex == ShapeIndexPointA)
+			{
+				if (EdgeIndex == EdgeIndexPointA)
+					continue;
+
+				if (VertIndexPointA != INDEX_NONE && Shape.VertToEdges[VertIndexPointA].Contains(EdgeIndex))
+					continue;
+			}
+
+			if (ShapeIndex == ShapeIndexPointB)
+			{
+				if (EdgeIndex == EdgeIndexPointB)
+					continue;
+
+				if (VertIndexPointB != INDEX_NONE && Shape.VertToEdges[VertIndexPointB].Contains(EdgeIndex))
+					continue;
+			}
+
+			const FIntVector2& EdgeVerts = Shape.Edges[EdgeIndex];
+			const FVector& EdgeA = Shape.Vertices[EdgeVerts.X];
+			const FVector& EdgeB = Shape.Vertices[EdgeVerts.Y];
+
+			FVector ClosestPointOnLine;
+			FVector BaryCoords;
+			const bool bIsIntersection = GetTriangleLineIntersection(
+				TriA
+				, TriB
+				, TriC
+				, EdgeA
+				, EdgeB
+				, ClosestPointOnLine
+				, BaryCoords
+			);
+
+			if (bIsIntersection && BaryCoords.Y < OutHitData.BaryCoords.Y)
+			{
+				OutHitData.bIsHit = true;
+				OutHitData.Location = ClosestPointOnLine;
+				OutHitData.bIsHitOnFirstTriangleSweep = bIsFirstTriangleSweep;
+				OutHitData.RopePointIndex = RopePointIndex;
+				OutHitData.EdgeIndex = EdgeIndex;
+				OutHitData.ShapeIndex = ShapeIndex;
+			}
+		}
+	}
 
 	bool GetTriangleLineIntersection(
 		const FVector& TriA
@@ -158,7 +152,8 @@ namespace TautRope
 		, const FVector& TriC
 		, const FVector& LineA
 		, const FVector& LineB
-		, FHitData& OutTautRopeHitData
+		, FVector& OutLocation
+		, FVector& OutBaryCoords
 	)
 	{
 		const FVector Dir = LineB - LineA;
@@ -192,10 +187,55 @@ namespace TautRope
 		{
 			return false;
 		}
-		OutTautRopeHitData.Location = LineA + Dir * T;
+		OutLocation = LineA + Dir * T;
 		const float W = 1.0f - U - V;
-		OutTautRopeHitData.BaryCoords = FVector(W, U, V);
+		OutBaryCoords = FVector(W, U, V);
 
 		return true;
 	};
+
+#if TAUT_ROPE_DEBUG_DRAWING
+	void DebugDrawSweep(
+		const UWorld* World
+		, const FVector& OriginLocationA
+		, const FVector& OriginLocationB
+		, const FVector& TargetLocationA
+		, const FVector& TargetLocationB
+		, const FHitData& OutHitData
+	)
+	{
+		if (!OutHitData.bIsHit || (OriginLocationA == TargetLocationA && OriginLocationB == TargetLocationB))
+		{
+			return;
+		}
+		TArray<FVector> Vertices;
+		Vertices.Add(OriginLocationA);
+		Vertices.Add(TargetLocationA);
+		Vertices.Add(OriginLocationB);
+		Vertices.Add(TargetLocationB);
+
+		TArray<int32> Indices;
+		// First triangle (OriginA, TargetA, OriginB)
+		Indices.Add(0); Indices.Add(1); Indices.Add(2);
+		// Second triangle (OriginB, TargetB, TargetA)
+		Indices.Add(2); Indices.Add(3); Indices.Add(1);
+
+		FColor MeshColor = FColor::Yellow;
+		if (OutHitData.bIsHit)
+		{
+			MeshColor = OutHitData.bIsHitOnFirstTriangleSweep ? FColor::Emerald : FColor::Red;
+		}
+		DrawDebugMesh(
+			World,
+			Vertices,
+			Indices,
+			MeshColor,
+			false,	// persistent lines
+			0.5f   // lifetime
+		);
+		DrawDebugLine(World, TargetLocationA, TargetLocationB, FColor::White, false, 0.5f);
+		DrawDebugLine(World, TargetLocationA, OriginLocationB, FColor::White, false, 0.5f);
+	}
+#endif // TAUT_ROPE_DEBUG_DRAWING
+
 }
