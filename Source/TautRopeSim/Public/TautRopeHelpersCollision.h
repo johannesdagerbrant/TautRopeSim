@@ -14,10 +14,21 @@ namespace TautRope
 		FVector Location = FVector::ZeroVector;
 		int32 ShapeIndex = INDEX_NONE;
 		int32 EdgeIndex = INDEX_NONE;
-		FVector BaryCoords = FVector(MAX_FLT);
+		float SweepRatio = MAX_FLT;
 	};
 
 	struct FPoint;
+
+	void SweepRemovePoint
+	(
+		TArray<FPoint>& RopePoints
+		, const int32 RemovePointIndex
+		, const TArray<FRopeCollisionShape>& Shapes
+#if TAUT_ROPE_DEBUG_DRAWING
+		, const UWorld* World = nullptr
+		, const bool bIsDebugDrawingActive = false
+#endif
+	);
 
 	void SweepSegmentThroughShapes(
 		FHitData& OutHitData
@@ -30,7 +41,8 @@ namespace TautRope
 		, const TArray<FRopeCollisionShape>& Shapes
 		, const int32 RopePointIndex
 	);
-	void SweepTriangleAgainstShape(
+
+	void SweepSegmentTriangleAgainstShape(
 		const FVector& TriA,
 		const FVector& TriB,
 		const FVector& TriC,
@@ -46,6 +58,14 @@ namespace TautRope
 		const bool bIsFirstTriangleSweep,
 		FHitData& OutHitData
 	);
+	void SweepTriangleAgainstShape(
+		const FVector& FromCorner,
+		const FVector& ToCorner,
+		const FVector& SupportCorner,
+		const FRopeCollisionShape& Shape,
+		const int32 ShapeIndex,
+		FHitData& OutHitData
+	);
 	bool GetTriangleLineIntersection(
 		const FVector& TriA
 		, const FVector& TriB
@@ -53,16 +73,25 @@ namespace TautRope
 		, const FVector& LineA
 		, const FVector& LineB
 		, FVector& OutLocation
-		, FVector& OutBaryCoords
+		, float& OutRatioAB
 	);
+
 #if TAUT_ROPE_DEBUG_DRAWING
-	void DebugDrawSweep(
+	void DebugDrawSegmentSweep(
 		const UWorld* World
 		, const FVector& OriginLocationA
 		, const FVector& OriginLocationB
 		, const FVector& TargetLocationA
 		, const FVector& TargetLocationB
 		, const FHitData& OutHitData
+	);
+
+	void DebugDrawPruningSweep(
+		const UWorld* World
+		, const FVector& A
+		, const FVector& B
+		, const FVector& C
+		, bool bIsHit
 	);
 #endif // TAUT_ROPE_DEBUG_DRAWING
 }

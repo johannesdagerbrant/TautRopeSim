@@ -5,6 +5,73 @@
 
 namespace TautRope
 {
+	void SweepRemovePoint
+	(
+		TArray<FPoint>& RopePoints
+		, const int32 RemovePointIndex
+		, const TArray<FRopeCollisionShape>& Shapes
+#if TAUT_ROPE_DEBUG_DRAWING
+		, const UWorld* World
+		, const bool bIsDebugDrawingActive
+#endif
+	)
+	{
+		ensure(RemovePointIndex > 0 && RemovePointIndex < RopePoints.Num());
+
+		bool bFoundIntersections = false;
+		FVector FromLocation = RopePoints[RemovePointIndex].Location;
+		FVector ToLocation = RopePoints[RemovePointIndex - 1].Location;
+		FVector SupportLocation = RopePoints[RemovePointIndex + 1].Location;
+		FHitData HitData;
+		HitData.bIsHit = true;
+		while(HitData.bIsHit)
+		{
+			HitData = FHitData();
+			for (int32 ShapeIndex = 0; ShapeIndex < Shapes.Num(); ++ShapeIndex)
+			{
+				const FRopeCollisionShape& Shape = Shapes[ShapeIndex];
+				SweepTriangleAgainstShape(
+					FromLocation
+					, ToLocation
+					, SupportLocation
+					, Shape
+					, ShapeIndex
+					, HitData
+				);
+			}
+#if TAUT_ROPE_DEBUG_DRAWING
+			if (IsValid(World) && bIsDebugDrawingActive)
+			{
+				const FVector SweptTriA = FromLocation;
+				const FVector SweptTriB = FMath::Lerp(FromLocation, ToLocation, FMath::Min(1.f, HitData.SweepRatio));
+				const FVector SweptTriC = SupportLocation;
+				DebugDrawPruningSweep(World, SweptTriA, SweptTriB, SweptTriC, HitData.bIsHit);
+
+				// TODO: Figure out correct triangulation so sweeps dont have any holes.
+			}
+#endif
+			if (HitData.bIsHit)
+			{
+				if (!bFoundIntersections)
+				{
+					bFoundIntersections = true;
+					RopePoints[RemovePointIndex] = FPoint(HitData);
+				}
+				else
+				{
+					RopePoints.Insert(TautRope::FPoint(HitData), RemovePointIndex);
+				}
+				FromLocation = FMath::Lerp(FromLocation, ToLocation, HitData.SweepRatio);
+				ToLocation = RopePoints[RemovePointIndex - 1].Location;
+				SupportLocation = RopePoints[RemovePointIndex].Location;
+			}
+		}
+		if (!bFoundIntersections)
+		{
+			RopePoints.RemoveAt(RemovePointIndex);
+		}
+	}
+
 	void SweepSegmentThroughShapes(
 		FHitData& OutHitData,
 		FPoint& InOutSegmentPointA,
@@ -17,12 +84,12 @@ namespace TautRope
 		const int32 RopePointIndex
 	)
 	{
-		OutHitData.BaryCoords = FVector(MAX_FLT);
+		OutHitData.SweepRatio = MAX_FLT;
 		// First perform triangle sweep for A-movement
 		for (int32 ShapeIndex = 0; ShapeIndex < Shapes.Num(); ++ShapeIndex)
 		{
 			const FRopeCollisionShape& Shape = Shapes[ShapeIndex];
-			SweepTriangleAgainstShape(
+			SweepSegmentTriangleAgainstShape(
 				OriginLocationA,	// TriA
 				TargetLocationA,	// TriB
 				OriginLocationB,	// TriC
@@ -42,19 +109,19 @@ namespace TautRope
 
 		if (OutHitData.bIsHit)
 		{
-			InOutSegmentPointA.Location = FMath::Lerp(OriginLocationA, TargetLocationA, OutHitData.BaryCoords.Y);
+			InOutSegmentPointA.Location = FMath::Lerp(OriginLocationA, TargetLocationA, OutHitData.SweepRatio);
 			return;
 		}
 
 		// No new collisions from A-movement triangle sweep
 		InOutSegmentPointA.Location = TargetLocationA;
 
-		OutHitData.BaryCoords = FVector(MAX_FLT);
+		OutHitData.SweepRatio = MAX_FLT;
 		// Perform triangle sweep for B-movement
 		for (int32 ShapeIndex = 0; ShapeIndex < Shapes.Num(); ++ShapeIndex)
 		{
 			const FRopeCollisionShape& Shape = Shapes[ShapeIndex];
-			SweepTriangleAgainstShape(
+			SweepSegmentTriangleAgainstShape(
 				OriginLocationB,	// TriA
 				TargetLocationB,	// TriB
 				TargetLocationA,	// TriC
@@ -74,7 +141,7 @@ namespace TautRope
 
 		if (OutHitData.bIsHit)
 		{
-			InOutSegmentPointB.Location = FMath::Lerp(OriginLocationB, TargetLocationB, OutHitData.BaryCoords.Y);
+			InOutSegmentPointB.Location = FMath::Lerp(OriginLocationB, TargetLocationB, OutHitData.SweepRatio);
 			return;
 		}
 
@@ -83,10 +150,10 @@ namespace TautRope
 	}
 
 
-	void SweepTriangleAgainstShape(
-		const FVector& TriA,
-		const FVector& TriB,
-		const FVector& TriC,
+	void SweepSegmentTriangleAgainstShape(
+		const FVector& FromCorner,
+		const FVector& ToCorner,
+		const FVector& SupportCorner,
 		const FRopeCollisionShape& Shape,
 		const int32 ShapeIndex,
 		const int32 ShapeIndexPointA,
@@ -125,22 +192,22 @@ namespace TautRope
 			const FVector& EdgeB = Shape.Vertices[EdgeVerts.Y];
 
 			FVector ClosestPointOnLine;
-			FVector BaryCoords;
+			float SweepRatio;
 			const bool bIsIntersection = GetTriangleLineIntersection(
-				TriA
-				, TriB
-				, TriC
+				FromCorner
+				, ToCorner
+				, SupportCorner
 				, EdgeA
 				, EdgeB
 				, ClosestPointOnLine
-				, BaryCoords
+				, SweepRatio
 			);
 
-			if (bIsIntersection && BaryCoords.Y < OutHitData.BaryCoords.Y)
+			if (bIsIntersection && SweepRatio < OutHitData.SweepRatio)
 			{
 				OutHitData.bIsHit = true;
 				OutHitData.Location = ClosestPointOnLine;
-				OutHitData.BaryCoords = BaryCoords;
+				OutHitData.SweepRatio = SweepRatio;
 				OutHitData.bIsHitOnFirstTriangleSweep = bIsFirstTriangleSweep;
 				OutHitData.RopePointIndex = RopePointIndex;
 				OutHitData.EdgeIndex = EdgeIndex;
@@ -148,20 +215,57 @@ namespace TautRope
 			}
 		}
 	}
+	void SweepTriangleAgainstShape(
+		const FVector& FromCorner,
+		const FVector& ToCorner,
+		const FVector& SupportCorner,
+		const FRopeCollisionShape& Shape,
+		const int32 ShapeIndex,
+		FHitData& OutHitData
+	)
+	{
+		for (int32 EdgeIndex = 0; EdgeIndex < Shape.Edges.Num(); ++EdgeIndex)
+		{
+			const FIntVector2& EdgeVerts = Shape.Edges[EdgeIndex];
+			const FVector& EdgeA = Shape.Vertices[EdgeVerts.X];
+			const FVector& EdgeB = Shape.Vertices[EdgeVerts.Y];
+
+			FVector ClosestPointOnLine;
+			float SweepRatio;
+			const bool bIsIntersection = GetTriangleLineIntersection(
+				FromCorner
+				, ToCorner
+				, SupportCorner
+				, EdgeA
+				, EdgeB
+				, ClosestPointOnLine
+				, SweepRatio
+			);
+
+			if (bIsIntersection && SweepRatio < OutHitData.SweepRatio)
+			{
+				OutHitData.bIsHit = true;
+				OutHitData.Location = ClosestPointOnLine;
+				OutHitData.SweepRatio = SweepRatio;
+				OutHitData.EdgeIndex = EdgeIndex;
+				OutHitData.ShapeIndex = ShapeIndex;
+			}
+		}
+	}
 
 	bool GetTriangleLineIntersection(
-		const FVector& TriA,
-		const FVector& TriB,
-		const FVector& TriC,
+		const FVector& FromCorner,
+		const FVector& ToCorner,
+		const FVector& SupportCorner,
 		const FVector& LineA,
 		const FVector& LineB,
 		FVector& OutLocation,
-		FVector& OutBaryCoords
+		float& OutRatioAB
 	)
 	{
 		const FVector Dir = LineB - LineA;
-		const FVector Edge1 = TriB - TriA;
-		const FVector Edge2 = TriC - TriA;
+		const FVector Edge1 = ToCorner - FromCorner;
+		const FVector Edge2 = SupportCorner - FromCorner;
 
 		const FVector PVec = FVector::CrossProduct(Dir, Edge2);
 		const float Det = FVector::DotProduct(Edge1, PVec);
@@ -172,17 +276,17 @@ namespace TautRope
 		}
 
 		const float InvDet = 1.0f / Det;
-		const FVector TVec = LineA - TriA;
+		const FVector TVec = LineA - FromCorner;
 
 		const float U = FVector::DotProduct(TVec, PVec) * InvDet;
-		if (U < KINDA_SMALL_NUMBER || U > 1.0f)
+		if (U < KINDA_SMALL_NUMBER || U > 1.0f + KINDA_SMALL_NUMBER)
 		{
 			return false;
 		}
 
 		const FVector QVec = FVector::CrossProduct(TVec, Edge1);
 		const float V = FVector::DotProduct(Dir, QVec) * InvDet;
-		if (V < -KINDA_SMALL_NUMBER || U + V > 1.0f)
+		if (V < KINDA_SMALL_NUMBER || U + V > 1.0f + KINDA_SMALL_NUMBER)
 		{
 			return false;
 		}
@@ -194,14 +298,13 @@ namespace TautRope
 		}
 
 		OutLocation = LineA + Dir * T;
-		const float W = 1.0f - U - V;
-		OutBaryCoords = FVector(W, U, V);
+		OutRatioAB = U;
 
 		return true;
 	}
 
 #if TAUT_ROPE_DEBUG_DRAWING
-	void DebugDrawSweep(
+	void DebugDrawSegmentSweep(
 		const UWorld* World
 		, const FVector& OriginLocationA
 		, const FVector& OriginLocationB
@@ -233,7 +336,30 @@ namespace TautRope
 			Indices,
 			MeshColor,
 			false,	// persistent lines
-			0.5f   // lifetime
+			0.1f   // lifetime
+		);
+	}
+
+	void DebugDrawPruningSweep(
+		const UWorld* World
+		, const FVector& A
+		, const FVector& B
+		, const FVector& C
+		, bool bIsHit
+	)
+	{
+		TArray<FVector> Vertices = { A, B, C };
+		TArray<int32> Indices;
+		// First triangle (OriginA, TargetA, OriginB)
+		Indices.Add(0); Indices.Add(1); Indices.Add(2);
+
+		DrawDebugMesh(
+			World,
+			Vertices,
+			Indices,
+			bIsHit ? FColor::Red : FColor::Magenta,
+			false,	// persistent lines
+			5.1f   // lifetime
 		);
 	}
 #endif // TAUT_ROPE_DEBUG_DRAWING

@@ -43,8 +43,8 @@ static TAutoConsoleVariable<int32> CVarDrawDebugRopeShapes(
 	ECVF_Cheat
 );
 
-static TAutoConsoleVariable<int32> CVarDrawDebugCollisionSweep(
-	TEXT("TautRope.DrawDebugCollisionSweep"),
+static TAutoConsoleVariable<int32> CVarDrawDebugSweep(
+	TEXT("TautRope.DrawDebugSweep"),
 	0,
 	TEXT("Draw sweep debug visualization.\n")
 	TEXT("0: Off\n")
@@ -260,9 +260,9 @@ bool ATautRopeActor::CollisionPhase(TArray<FVector>& TargetRopePoints)
 				SegmentSweepHits.Add(MoveTemp(HitData));
 			}
 #if TAUT_ROPE_DEBUG_DRAWING
-			if (CVarDrawDebugCollisionSweep.GetValueOnGameThread() != 0)
+			if (CVarDrawDebugSweep.GetValueOnGameThread() != 0)
 			{
-				TautRope::DebugDrawSweep(
+				TautRope::DebugDrawSegmentSweep(
 					GetWorld()
 					, OriginLocationA
 					, OriginLocationB
@@ -307,6 +307,7 @@ bool ATautRopeActor::VertexPhase()
 
 bool ATautRopeActor::PruningPhase()
 {
+
 	for (int32 i = RopePoints.Num() - 2; i > 0; --i)
 	{
 		if (RopePoints[i].VertIndex != INDEX_NONE)
@@ -317,13 +318,15 @@ bool ATautRopeActor::PruningPhase()
 			{
 				continue;
 			}
+			TautRope::SweepRemovePoint(
+				RopePoints
+				, i
+				, NearbyShapes
 #if TAUT_ROPE_DEBUG_DRAWING
-			if (CVarDrawDebugCollisionSweep.GetValueOnGameThread() != 0)
-			{
-				TautRope::DebugDrawPruningSweep(GetWorld(), RopePoints[i - 1].Location, RopePoints[i].Location, RopePoints[i + 1].Location);
-			}
-#endif // TAUT_ROPE_DEBUG_DRAWING
-			RopePoints.RemoveAt(i);
+				, GetWorld()
+				, CVarDrawDebugSweep.GetValueOnGameThread() != 0
+#endif
+			);
 		}
 	}
 	TBitArray<> PointsToRemove;
@@ -339,13 +342,15 @@ bool ATautRopeActor::PruningPhase()
 	{
 		if (PointsToRemove[i])
 		{
+			TautRope::SweepRemovePoint(
+				RopePoints
+				, i
+				, NearbyShapes
 #if TAUT_ROPE_DEBUG_DRAWING
-			if (CVarDrawDebugCollisionSweep.GetValueOnGameThread() != 0)
-			{
-				TautRope::DebugDrawPruningSweep(GetWorld(), RopePoints[i - 1].Location, RopePoints[i].Location, RopePoints[i + 1].Location);
-			}
-#endif // TAUT_ROPE_DEBUG_DRAWING
-			RopePoints.RemoveAt(i); 
+				, GetWorld()
+				, CVarDrawDebugSweep.GetValueOnGameThread() != 0
+#endif
+			);
 		}
 	}
 	return !PointsToRemove.IsEmpty();
