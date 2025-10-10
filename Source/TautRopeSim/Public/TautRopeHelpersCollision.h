@@ -12,6 +12,7 @@ namespace TautRope
 		bool bIsHitOnFirstTriangleSweep = false;
 		int32 RopePointIndex = INDEX_NONE;
 		FVector Location = FVector::ZeroVector;
+		FVector OnSweepEdgeLocation = FVector::ZeroVector;
 		int32 ShapeIndex = INDEX_NONE;
 		int32 EdgeIndex = INDEX_NONE;
 		float SweepRatio = MAX_FLT;
@@ -59,21 +60,22 @@ namespace TautRope
 		FHitData& OutHitData
 	);
 	void SweepTriangleAgainstShape(
-		const FVector& FromCorner,
-		const FVector& ToCorner,
-		const FVector& SupportCorner,
-		const FRopeCollisionShape& Shape,
-		const int32 ShapeIndex,
-		FHitData& OutHitData
+		const FVector& FromCorner
+		, const FVector& ToCorner
+		, const FVector& SupportCorner
+		, const FRopeCollisionShape& Shape
+		, const int32 ShapeIndex
+		, FHitData& OutHitData
 	);
 	bool GetTriangleLineIntersection(
-		const FVector& TriA
-		, const FVector& TriB
-		, const FVector& TriC
+		const FVector& FromCorner
+		, const FVector& ToCorner
+		, const FVector& SupportCorner
 		, const FVector& LineA
 		, const FVector& LineB
 		, FVector& OutLocation
-		, float& OutRatioAB
+		, FVector& OutOnSweepEdgeLocation
+		, float& OutSweepRatio
 	);
 
 #if TAUT_ROPE_DEBUG_DRAWING

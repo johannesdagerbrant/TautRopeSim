@@ -289,35 +289,10 @@ bool ATautRopeActor::CollisionPhase(TArray<FVector>& TargetRopePoints)
 bool ATautRopeActor::VertexPhase()
 {
 	TBitArray<> PointsOnOrAdjecentToShapeVert = TautRope::GetAdjacentPointsOnSameVertexCone(RopePoints, NearbyShapes);
-	if (PointsOnOrAdjecentToShapeVert.IsEmpty())
-	{
-		return false;
-	}
 	for (int32 i = RopePoints.Num() - 1; i >= 0; --i)
 	{
 		if (PointsOnOrAdjecentToShapeVert[i])
 		{
-			RopePoints.RemoveAt(i);
-		}
-	}
-
-	TautRope::LetPointsOnVertexSlideOntoNewEdge(RopePoints, NearbyShapes);
-	return true;
-}
-
-bool ATautRopeActor::PruningPhase()
-{
-
-	for (int32 i = RopePoints.Num() - 2; i > 0; --i)
-	{
-		if (RopePoints[i].VertIndex != INDEX_NONE)
-		{
-			const TautRope::FPoint& Point = RopePoints[i];
-			const TautRope::FRopeCollisionShape& Shape = NearbyShapes[Point.ShapeIndex];
-			if (Shape.IsCornerVertex(Point.VertIndex)) // The point is on a vertex with no other edge to slide onto. 
-			{
-				continue;
-			}
 			TautRope::SweepRemovePoint(
 				RopePoints
 				, i
@@ -329,14 +304,55 @@ bool ATautRopeActor::PruningPhase()
 			);
 		}
 	}
+	TautRope::LetPointsOnVertexSlideOntoNewEdge(RopePoints, NearbyShapes);
+	return true;
+}
+
+bool ATautRopeActor::PruningPhase()
+{
 	TBitArray<> PointsToRemove;
 	PointsToRemove.Init(false, RopePoints.Num());
 	for (int32 i = 1; i < RopePoints.Num() - 1; ++i)
 	{
+		const TautRope::FPoint& LastPoint = RopePoints[i - 1];
 		const TautRope::FPoint& Point = RopePoints[i];
+		const TautRope::FPoint& NextPoint = RopePoints[i + 1];
 		const TautRope::FRopeCollisionShape& Shape = NearbyShapes[Point.ShapeIndex];
+		if (Point.VertIndex != INDEX_NONE)
+		{
+			if (Shape.IsCornerVertex(Point.VertIndex))
+			{
+				if (
+					FVector::DistSquared(Point.Location, LastPoint.Location) < TAUT_ROPE_DISTANCE_TOLERANCE_SQUARED
+					|| FVector::DistSquared(Point.Location, NextPoint.Location) < TAUT_ROPE_DISTANCE_TOLERANCE_SQUARED
+				)
+				{
+					PointsToRemove[i] = true;
+					continue;
+				}
+			}
+			else
+			{
+				PointsToRemove[i] = true;
+				continue;
+			}
+		}
+		if (Point.ShapeIndex == LastPoint.ShapeIndex && Point.EdgeIndex == LastPoint.EdgeIndex)
+		{
+			PointsToRemove[i] = true;
+			continue;
+		}
 		const FQuat& EdgeRotation = Shape.EdgeRotations[Point.EdgeIndex];
-		PointsToRemove[i] = !TautRope::IsRopeWrappingEdge(RopePoints[i - 1].Location, Point.Location, RopePoints[i + 1].Location, EdgeRotation);
+		const bool bIsRopeWrappingEdge = TautRope::IsRopeWrappingEdge(
+			LastPoint.Location
+			, Point.Location
+			, NextPoint.Location
+			, EdgeRotation
+		);
+		if (!bIsRopeWrappingEdge)
+		{
+			PointsToRemove[i] = true;
+		}
 	}
 	for (int32 i = RopePoints.Num() - 2; i > 0; --i)
 	{
@@ -353,7 +369,7 @@ bool ATautRopeActor::PruningPhase()
 			);
 		}
 	}
-	return !PointsToRemove.IsEmpty();
+	return PointsToRemove.Contains(true);
 }
 
 

@@ -11,16 +11,13 @@ namespace TautRope
 	)
 	{
 		TBitArray<> ToRemove;
+		ToRemove.Init(false, RopePoints.Num());
 		for (int32 i = 0; i < RopePoints.Num(); ++i)
 		{
 			const TautRope::FPoint& PointAtVert = RopePoints[i];
 			if (PointAtVert.VertIndex == INDEX_NONE)
 			{
 				continue;
-			}
-			if (ToRemove.IsEmpty())
-			{
-				ToRemove.Init(false, RopePoints.Num());
 			}
 			const TautRope::FRopeCollisionShape& Shape = NearbyShapes[PointAtVert.ShapeIndex];
 			const TArray<int32>& AdjacentEdges = Shape.VertToEdges[PointAtVert.VertIndex];

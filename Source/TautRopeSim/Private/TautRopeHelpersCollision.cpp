@@ -22,6 +22,7 @@ namespace TautRope
 		FVector FromLocation = RopePoints[RemovePointIndex].Location;
 		FVector ToLocation = RopePoints[RemovePointIndex - 1].Location;
 		FVector SupportLocation = RopePoints[RemovePointIndex + 1].Location;
+
 		FHitData HitData;
 		HitData.bIsHit = true;
 		while(HitData.bIsHit)
@@ -29,12 +30,11 @@ namespace TautRope
 			HitData = FHitData();
 			for (int32 ShapeIndex = 0; ShapeIndex < Shapes.Num(); ++ShapeIndex)
 			{
-				const FRopeCollisionShape& Shape = Shapes[ShapeIndex];
 				SweepTriangleAgainstShape(
 					FromLocation
 					, ToLocation
 					, SupportLocation
-					, Shape
+					, Shapes[ShapeIndex]
 					, ShapeIndex
 					, HitData
 				);
@@ -42,12 +42,14 @@ namespace TautRope
 #if TAUT_ROPE_DEBUG_DRAWING
 			if (IsValid(World) && bIsDebugDrawingActive)
 			{
-				const FVector SweptTriA = FromLocation;
-				const FVector SweptTriB = FMath::Lerp(FromLocation, ToLocation, FMath::Min(1.f, HitData.SweepRatio));
-				const FVector SweptTriC = SupportLocation;
-				DebugDrawPruningSweep(World, SweptTriA, SweptTriB, SweptTriC, HitData.bIsHit);
-
-				// TODO: Figure out correct triangulation so sweeps dont have any holes.
+				if (HitData.bIsHit)
+				{
+					DebugDrawPruningSweep(World, FromLocation, HitData.OnSweepEdgeLocation, SupportLocation, true);
+				}
+				else
+				{
+					DebugDrawPruningSweep(World, FromLocation, ToLocation, SupportLocation, false);
+				}
 			}
 #endif
 			if (HitData.bIsHit)
@@ -61,7 +63,7 @@ namespace TautRope
 				{
 					RopePoints.Insert(TautRope::FPoint(HitData), RemovePointIndex);
 				}
-				FromLocation = FMath::Lerp(FromLocation, ToLocation, HitData.SweepRatio);
+				FromLocation = HitData.OnSweepEdgeLocation;
 				ToLocation = RopePoints[RemovePointIndex - 1].Location;
 				SupportLocation = RopePoints[RemovePointIndex].Location;
 			}
@@ -109,7 +111,7 @@ namespace TautRope
 
 		if (OutHitData.bIsHit)
 		{
-			InOutSegmentPointA.Location = FMath::Lerp(OriginLocationA, TargetLocationA, OutHitData.SweepRatio);
+			InOutSegmentPointA.Location = OutHitData.OnSweepEdgeLocation;
 			return;
 		}
 
@@ -141,7 +143,7 @@ namespace TautRope
 
 		if (OutHitData.bIsHit)
 		{
-			InOutSegmentPointB.Location = FMath::Lerp(OriginLocationB, TargetLocationB, OutHitData.SweepRatio);
+			InOutSegmentPointB.Location = OutHitData.OnSweepEdgeLocation;
 			return;
 		}
 
@@ -192,7 +194,8 @@ namespace TautRope
 			const FVector& EdgeB = Shape.Vertices[EdgeVerts.Y];
 
 			FVector ClosestPointOnLine;
-			float SweepRatio;
+			FVector OnSweepEdgeLocation;
+			float SweepRatio = MAX_FLT;
 			const bool bIsIntersection = GetTriangleLineIntersection(
 				FromCorner
 				, ToCorner
@@ -200,6 +203,7 @@ namespace TautRope
 				, EdgeA
 				, EdgeB
 				, ClosestPointOnLine
+				, OnSweepEdgeLocation
 				, SweepRatio
 			);
 
@@ -207,6 +211,7 @@ namespace TautRope
 			{
 				OutHitData.bIsHit = true;
 				OutHitData.Location = ClosestPointOnLine;
+				OutHitData.OnSweepEdgeLocation = OnSweepEdgeLocation;
 				OutHitData.SweepRatio = SweepRatio;
 				OutHitData.bIsHitOnFirstTriangleSweep = bIsFirstTriangleSweep;
 				OutHitData.RopePointIndex = RopePointIndex;
@@ -231,7 +236,8 @@ namespace TautRope
 			const FVector& EdgeB = Shape.Vertices[EdgeVerts.Y];
 
 			FVector ClosestPointOnLine;
-			float SweepRatio;
+			FVector OnSweepEdgeLocation;
+			float SweepRatio = MAX_FLT;
 			const bool bIsIntersection = GetTriangleLineIntersection(
 				FromCorner
 				, ToCorner
@@ -239,13 +245,14 @@ namespace TautRope
 				, EdgeA
 				, EdgeB
 				, ClosestPointOnLine
+				, OnSweepEdgeLocation
 				, SweepRatio
 			);
-
 			if (bIsIntersection && SweepRatio < OutHitData.SweepRatio)
 			{
 				OutHitData.bIsHit = true;
 				OutHitData.Location = ClosestPointOnLine;
+				OutHitData.OnSweepEdgeLocation = OnSweepEdgeLocation;
 				OutHitData.SweepRatio = SweepRatio;
 				OutHitData.EdgeIndex = EdgeIndex;
 				OutHitData.ShapeIndex = ShapeIndex;
@@ -260,16 +267,17 @@ namespace TautRope
 		const FVector& LineA,
 		const FVector& LineB,
 		FVector& OutLocation,
-		float& OutRatioAB
+		FVector& OutOnSweepEdgeLocation,
+		float& OutSweepRatio
 	)
 	{
+		// --- Step 1: Möller–Trumbore triangle-line intersection ---
 		const FVector Dir = LineB - LineA;
 		const FVector Edge1 = ToCorner - FromCorner;
 		const FVector Edge2 = SupportCorner - FromCorner;
 
 		const FVector PVec = FVector::CrossProduct(Dir, Edge2);
 		const float Det = FVector::DotProduct(Edge1, PVec);
-
 		if (FMath::Abs(Det) < KINDA_SMALL_NUMBER)
 		{
 			return false; // Line parallel to triangle
@@ -279,14 +287,14 @@ namespace TautRope
 		const FVector TVec = LineA - FromCorner;
 
 		const float U = FVector::DotProduct(TVec, PVec) * InvDet;
-		if (U < KINDA_SMALL_NUMBER || U > 1.0f + KINDA_SMALL_NUMBER)
+		if (U < KINDA_SMALL_NUMBER || U > 1.0f)
 		{
 			return false;
 		}
 
 		const FVector QVec = FVector::CrossProduct(TVec, Edge1);
 		const float V = FVector::DotProduct(Dir, QVec) * InvDet;
-		if (V < KINDA_SMALL_NUMBER || U + V > 1.0f + KINDA_SMALL_NUMBER)
+		if (V < 0.f || U + V > 1.0f)
 		{
 			return false;
 		}
@@ -298,7 +306,32 @@ namespace TautRope
 		}
 
 		OutLocation = LineA + Dir * T;
-		OutRatioAB = U;
+
+		// --- Step 2: Compute continuation along SupportCorner → OutLocation ---
+		const FVector RayOrigin = SupportCorner;
+		const FVector RayDir = (OutLocation - SupportCorner).GetSafeNormal();
+
+		const FVector LinePoint = FromCorner;
+		const FVector LineDir = ToCorner - FromCorner;
+
+		const FVector CrossDir = FVector::CrossProduct(LineDir, RayDir);
+		const float Denom = CrossDir.SizeSquared();
+
+		if (Denom > KINDA_SMALL_NUMBER)
+		{
+			const float t = FVector::DotProduct(FVector::CrossProduct(RayOrigin - LinePoint, RayDir), CrossDir) / Denom;
+
+			OutSweepRatio = t / LineDir.Size(); // normalized ratio along rope edge
+			OutSweepRatio = FMath::Clamp(OutSweepRatio, 0.f, 1.f);
+
+			OutOnSweepEdgeLocation = LinePoint + LineDir * t;
+		}
+		else
+		{
+			// Ray and edge are parallel → fallback to nearest edge point
+			OutSweepRatio = 0.f;
+			OutOnSweepEdgeLocation = FromCorner;
+		}
 
 		return true;
 	}
@@ -336,7 +369,7 @@ namespace TautRope
 			Indices,
 			MeshColor,
 			false,	// persistent lines
-			0.1f   // lifetime
+			0.5f   // lifetime
 		);
 	}
 
@@ -357,9 +390,9 @@ namespace TautRope
 			World,
 			Vertices,
 			Indices,
-			bIsHit ? FColor::Red : FColor::Magenta,
+			FColor::Magenta,
 			false,	// persistent lines
-			5.1f   // lifetime
+			0.5f   // lifetime
 		);
 	}
 #endif // TAUT_ROPE_DEBUG_DRAWING
