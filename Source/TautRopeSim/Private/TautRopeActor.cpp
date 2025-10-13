@@ -187,31 +187,30 @@ TArray<FVector> ATautRopeActor::MovementPhase()
 		TautRope::FPoint& PointB = RopePoints[i];
 		if (PointB.VertIndex != INDEX_NONE)
 		{
-			const bool bIsCornerVertex = NearbyShapes[PointB.ShapeIndex].IsCornerVertex(PointB.VertIndex);
-			if (!bIsCornerVertex)
-			{
-				continue;
-			}
+			continue;
 		}
 		const FVector& LocationA = RopeTargetLocations[i - 1];
 		const FVector& LocationC = RopeTargetLocations[i + 1];
 		const TautRope::FRopeCollisionShape& Shape = NearbyShapes[PointB.ShapeIndex];
 		const FIntVector2& Edge = Shape.Edges[PointB.EdgeIndex];
+		const bool bIsEdgeCornerAtVertexA = NearbyShapes[PointB.ShapeIndex].IsCornerVertex(Edge.X);
+		const bool bIsEdgeCornerAtVertexB = NearbyShapes[PointB.ShapeIndex].IsCornerVertex(Edge.Y);
 		const FVector& EdgeVertA = Shape.Vertices[Edge.X];
 		const FVector& EdgeVertB = Shape.Vertices[Edge.Y];
 		float OutDistAlongEdge = 0.f;
 		float OutEdgeLength = 0.f;
 		const FVector PrevRopeTargetLocation = RopeTargetLocations[i];
 		const FVector RopeTargetLocation = TautRope::FindMinDistancePointBetweenABOnLineXY(LocationA, LocationC, EdgeVertA, EdgeVertB, OutDistAlongEdge, OutEdgeLength);
-		if (OutDistAlongEdge < TAUT_ROPE_DISTANCE_TOLERANCE)
+
+		if (!bIsEdgeCornerAtVertexA && OutDistAlongEdge < TAUT_ROPE_DISTANCE_TOLERANCE)
 		{
 			PointB.VertIndex = Edge.X;
-			RopeTargetLocations[i] = EdgeVertA;
+			RopeTargetLocations[i] = EdgeVertA + (EdgeVertA - EdgeVertB).GetSafeNormal() * TAUT_ROPE_DISTANCE_TOLERANCE;
 		}
-		else if (OutDistAlongEdge > OutEdgeLength - TAUT_ROPE_DISTANCE_TOLERANCE)
+		else if (!bIsEdgeCornerAtVertexB && OutDistAlongEdge > OutEdgeLength - TAUT_ROPE_DISTANCE_TOLERANCE)
 		{
 			PointB.VertIndex = Edge.Y;
-			RopeTargetLocations[i] = EdgeVertB;
+			RopeTargetLocations[i] = EdgeVertB + (EdgeVertB - EdgeVertA).GetSafeNormal() * TAUT_ROPE_DISTANCE_TOLERANCE;
 		}
 		else
 		{
@@ -312,22 +311,8 @@ bool ATautRopeActor::PruningPhase()
 		const TautRope::FRopeCollisionShape& Shape = NearbyShapes[Point.ShapeIndex];
 		if (Point.VertIndex != INDEX_NONE)
 		{
-			if (Shape.IsCornerVertex(Point.VertIndex))
-			{
-				if (
-					FVector::DistSquared(Point.Location, LastPoint.Location) < TAUT_ROPE_DISTANCE_TOLERANCE_SQUARED
-					|| FVector::DistSquared(Point.Location, NextPoint.Location) < TAUT_ROPE_DISTANCE_TOLERANCE_SQUARED
-				)
-				{
-					PointsToRemove[i] = true;
-					continue;
-				}
-			}
-			else
-			{
-				PointsToRemove[i] = true;
-				continue;
-			}
+			PointsToRemove[i] = true;
+			continue;
 		}
 		if (Point.ShapeIndex == LastPoint.ShapeIndex && Point.EdgeIndex == LastPoint.EdgeIndex)
 		{

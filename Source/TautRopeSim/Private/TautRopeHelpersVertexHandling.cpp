@@ -74,15 +74,11 @@ namespace TautRope
 			{
 				continue;
 			}
-			const TautRope::FRopeCollisionShape& Shape = NearbyShapes[PointB.ShapeIndex];
-			if (Shape.IsCornerVertex(PointB.VertIndex)) // The point is on a vertex with no other edge to slide onto. 
-			{
-				continue;
-			}
 			const FVector& LocationA = RopePoints[i - 1].Location;
 			const FVector& LocationB = PointB.Location;
 			const FVector& LocationC = RopePoints[i + 1].Location;
 
+			const TautRope::FRopeCollisionShape& Shape = NearbyShapes[PointB.ShapeIndex];
 			const FIntVector2& FromEdge = Shape.Edges[PointB.EdgeIndex];
 			const FVector& FromEdgeVertX = Shape.Vertices[FromEdge.X];
 			const FVector& FromEdgeVertY = Shape.Vertices[FromEdge.Y];
