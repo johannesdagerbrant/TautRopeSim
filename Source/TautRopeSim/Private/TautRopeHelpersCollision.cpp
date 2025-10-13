@@ -300,7 +300,7 @@ namespace TautRope
 		}
 
 		const float T = FVector::DotProduct(Edge2, QVec) * InvDet;
-		if (T < -KINDA_SMALL_NUMBER || T > 1.f + KINDA_SMALL_NUMBER)
+		if (T < 0.f || T > 1.f)
 		{
 			return false;
 		}
