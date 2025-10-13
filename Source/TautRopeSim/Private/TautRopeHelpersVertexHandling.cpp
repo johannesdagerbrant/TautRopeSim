@@ -52,10 +52,7 @@ namespace TautRope
 			}
 			for (int32 j = GroupStart; j <= GroupEnd; ++j)
 			{
-				if (j != i)
-				{
-					ToRemove[j] = true;
-				}
+				ToRemove[j] = true;
 			}
 			i = GroupEnd;
 		}

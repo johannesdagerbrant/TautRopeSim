@@ -41,6 +41,10 @@ namespace TautRope
 		, const FVector& TargetLocationB
 		, const TArray<FRopeCollisionShape>& Shapes
 		, const int32 RopePointIndex
+#if TAUT_ROPE_DEBUG_DRAWING
+		, const UWorld* World
+		, const bool bIsDebugDrawingActive
+#endif
 	);
 
 	void SweepSegmentTriangleAgainstShape(
@@ -59,12 +63,13 @@ namespace TautRope
 		const bool bIsFirstTriangleSweep,
 		FHitData& OutHitData
 	);
-	void SweepTriangleAgainstShape(
+	void SweepRemoveTriangleAgainstShape(
 		const FVector& FromCorner
 		, const FVector& ToCorner
 		, const FVector& SupportCorner
 		, const FRopeCollisionShape& Shape
 		, const int32 ShapeIndex
+		, const TArray<FIntVector2>& IgnoredEdges
 		, FHitData& OutHitData
 	);
 	bool GetTriangleLineIntersection(
@@ -79,16 +84,7 @@ namespace TautRope
 	);
 
 #if TAUT_ROPE_DEBUG_DRAWING
-	void DebugDrawSegmentSweep(
-		const UWorld* World
-		, const FVector& OriginLocationA
-		, const FVector& OriginLocationB
-		, const FVector& TargetLocationA
-		, const FVector& TargetLocationB
-		, const FHitData& OutHitData
-	);
-
-	void DebugDrawPruningSweep(
+	void DebugDrawSweep(
 		const UWorld* World
 		, const FVector& A
 		, const FVector& B

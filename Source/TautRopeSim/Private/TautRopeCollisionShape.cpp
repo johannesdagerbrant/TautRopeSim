@@ -177,10 +177,9 @@ namespace TautRope
 				{
 					EdgeRayDistance.X = LatestHitResult.Distance;
 				}
-				if (!OtherPrimComp->LineTraceComponent(LatestHitResult, VertB, VertA, TraceParams))
-				{
-					continue;
-				}
+
+				ensure(OtherPrimComp->LineTraceComponent(LatestHitResult, VertB, VertA, TraceParams));
+
 				if (LatestHitResult.bStartPenetrating || LatestHitResult.Distance < SMALL_NUMBER)
 				{
 					EdgeRayDistance.Y = -1.f;
