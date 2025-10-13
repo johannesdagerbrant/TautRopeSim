@@ -119,6 +119,9 @@ namespace TautRope
 				Edges.Add(FIntVector2(VertIndexA, VertIndexB));
 				EdgeRotations.Add(EdgeRotation);
 			}
+
+			// TODO: incremental steps inbetween NewVertA and NewVertB where we raycast in both directions for new edges
+			// Step distance should be TAUT_ROPE_SHAPE_EDGE_RAY_INCREMENT_DISTANCE
 		}
 		PopulateVertToEdges();
 
