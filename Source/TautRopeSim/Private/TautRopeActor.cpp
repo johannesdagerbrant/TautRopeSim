@@ -293,15 +293,7 @@ bool ATautRopeActor::VertexPhase()
 	{
 		if (PointsOnOrAdjecentToShapeVert[i])
 		{
-			TautRope::SweepRemovePoint(
-				RopePoints
-				, i
-				, NearbyShapes
-#if TAUT_ROPE_DEBUG_DRAWING
-				, GetWorld()
-				, CVarDrawDebugSweep.GetValueOnGameThread() != 0
-#endif
-			);
+			RopePoints.RemoveAt(i);
 		}
 	}
 	TautRope::LetPointsOnVertexSlideOntoNewEdge(RopePoints, NearbyShapes);

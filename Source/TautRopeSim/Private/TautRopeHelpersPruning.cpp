@@ -19,23 +19,13 @@ namespace TautRope
 		const FVector PlaneNormal = FVector::CrossProduct(PlaneForward, PlaneDown).GetSafeNormal();
 
 		// --------------------------------------------------------------------
-		// 2. If the point is almost at one of its neighbors → keep it
-		//    (prevents pruning rope anchors at vertices)
-		// --------------------------------------------------------------------
-		if (FVector::DistSquared(PointLocationB, PointLocationA) < TAUT_ROPE_DISTANCE_TOLERANCE_SQUARED ||
-			FVector::DistSquared(PointLocationB, PointLocationC) < TAUT_ROPE_DISTANCE_TOLERANCE_SQUARED)
-		{
-			return true;
-		}
-
-		// --------------------------------------------------------------------
 		// 3. Signed distances of neighbors relative to the plane
 		// --------------------------------------------------------------------
 		const float DistA = FVector::DotProduct(PointLocationA - PointLocationB, PlaneNormal);
 		const float DistC = FVector::DotProduct(PointLocationC - PointLocationB, PlaneNormal);
 
-		// If both points are clearly on the same side → not wrapping
-		if (DistA * DistC > TAUT_ROPE_DISTANCE_TOLERANCE)
+		// If both points are clearly in front of the plane, no wrapping
+		if (DistA > TAUT_ROPE_DISTANCE_TOLERANCE && DistC > TAUT_ROPE_DISTANCE_TOLERANCE)
 		{
 			return false;
 		}
