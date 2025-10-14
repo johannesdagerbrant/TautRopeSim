@@ -81,47 +81,17 @@ namespace TautRope
     )
 	{
 		FRopeCollisionShape IntactShape(Convex, PrimComp->GetComponentTransform());
-		TArray<FVector2f> EdgeRayDistances;
-		RaycastAlongIntactShapeEdges(IntactShape, OtherPrimComps, EdgeRayDistances);
 
 		for (int32 EdgeIndex = 0; EdgeIndex < IntactShape.Edges.Num(); ++EdgeIndex)
 		{
 			const FIntVector2& IntactEdge = IntactShape.Edges[EdgeIndex];
-			FVector2f& EdgeRayDistance = EdgeRayDistances[EdgeIndex];
 			const FQuat& EdgeRotation = IntactShape.EdgeRotations[EdgeIndex];
-			if (EdgeRayDistance.X == FLT_MAX) // No ray intersection, keep edge intact
-			{
-				ensure(EdgeRayDistance.Y == FLT_MAX);
-				const int32 VertIndexA = FindOrAddVertex(IntactShape.Vertices[IntactEdge.X], Vertices);
-				const int32 VertIndexB = FindOrAddVertex(IntactShape.Vertices[IntactEdge.Y], Vertices);
-				Edges.Add(FIntVector2(VertIndexA, VertIndexB));
-				EdgeRotations.Add(EdgeRotation);
-				continue;
-			}
-			const FVector& IntactVertA = IntactShape.Vertices[IntactEdge.X];
-			const FVector& IntactVertB = IntactShape.Vertices[IntactEdge.Y];
-			const FVector DirectionAB = (IntactVertB - IntactVertA).GetSafeNormal();
-
-			if (EdgeRayDistance.X > 0.f) // If vert A is not inside other shape.
-			{
-				const FVector NewVertB = IntactVertA + DirectionAB * (EdgeRayDistance.X + TAUT_ROPE_DISTANCE_TOLERANCE);
-				const int32 VertIndexA = FindOrAddVertex(IntactVertA, Vertices);
-				const int32 VertIndexB = FindOrAddVertex(NewVertB, Vertices);
-				Edges.Add(FIntVector2(VertIndexA, VertIndexB));
-				EdgeRotations.Add(EdgeRotation);
-			}
-
-			if (EdgeRayDistance.Y > 0.f) // If vert B is not inside other shape.
-			{
-				const FVector NewVertA = IntactVertB - DirectionAB * (EdgeRayDistance.Y + TAUT_ROPE_DISTANCE_TOLERANCE);
-				const int32 VertIndexA = FindOrAddVertex(NewVertA, Vertices);
-				const int32 VertIndexB = FindOrAddVertex(IntactVertB, Vertices);
-				Edges.Add(FIntVector2(VertIndexA, VertIndexB));
-				EdgeRotations.Add(EdgeRotation);
-			}
-
-			// TODO: incremental steps inbetween NewVertA and NewVertB where we raycast in both directions for new edges
-			// Step distance should be TAUT_ROPE_SHAPE_EDGE_RAY_INCREMENT_DISTANCE
+			const FVector& VertA = IntactShape.Vertices[IntactEdge.X];
+			const FVector& VertB = IntactShape.Vertices[IntactEdge.Y];
+			FHitResult InitHitResultA = FHitResult();
+			FHitResult InitHitResultB = FHitResult();
+			MakeInitialHitResults(InitHitResultA, InitHitResultB, VertA, VertB, OtherPrimComps);
+			CreateIntermedateEdges(InitHitResultA, InitHitResultB, EdgeRotation, OtherPrimComps);
 		}
 		PopulateVertToEdges();
 
@@ -131,6 +101,149 @@ namespace TautRope
 			IsCornerVertexList[VertexIndex] = VertToEdges[VertexIndex].Num() < 2;
 		}
     };
+
+	void FRopeCollisionShape::MakeInitialHitResults(
+		FHitResult& InitHitResultA
+		, FHitResult& InitHitResultB
+		, const FVector& A
+		, const FVector& B
+		, const TArray<UPrimitiveComponent*>& OtherPrimComps
+		, const FCollisionQueryParams& TraceParams
+	) const
+	{
+		const FVector AB = (B - A).GetSafeNormal() * TAUT_ROPE_DISTANCE_TOLERANCE;
+		bool bIsHitA = false;
+		for (UPrimitiveComponent* OtherPrimComp : OtherPrimComps)
+		{
+			if (OtherPrimComp->LineTraceComponent(InitHitResultA, A - AB, A + AB, TraceParams))
+			{
+				bIsHitA = true;
+				break;
+			}
+		}
+		if (bIsHitA)
+		{
+			InitHitResultA.bStartPenetrating = true;
+			InitHitResultA.Distance = -1.f;
+		}
+		else
+		{
+			InitHitResultA.bStartPenetrating = false;
+			InitHitResultA.Distance = FLT_MAX;
+		}
+		InitHitResultA.Location = A;
+
+		bool bIsHitB = false;
+		for (UPrimitiveComponent* OtherPrimComp : OtherPrimComps)
+		{
+			if (OtherPrimComp->LineTraceComponent(InitHitResultB, B + AB, B - AB, TraceParams))
+			{
+				bIsHitB = true;
+				break;
+			}
+		}
+		if (bIsHitB)
+		{
+			InitHitResultB.bStartPenetrating = true;
+			InitHitResultB.Distance = -1.f;
+		}
+		else
+		{
+			InitHitResultB.bStartPenetrating = false;
+			InitHitResultB.Distance = FLT_MAX;
+		}
+		InitHitResultB.Location = B;
+	}
+
+	void FRopeCollisionShape::CreateIntermedateEdges(
+		const FHitResult& LastHitResultA
+		, const FHitResult& LastHitResultB
+		, const FQuat& EdgeRotation
+		, const TArray<UPrimitiveComponent*>& OtherPrimComps
+		, const FCollisionQueryParams& TraceParams
+	)
+	{
+		if (
+			LastHitResultA.Distance < FLT_MAX 
+			&& LastHitResultB.Distance < FLT_MAX
+			&& LastHitResultA.Component == LastHitResultB.Component
+			&& LastHitResultA.ElementIndex == LastHitResultB.ElementIndex
+		)
+		{
+			return;
+		}
+		const FVector& A = LastHitResultA.Location;
+		const FVector& B = LastHitResultB.Location;
+		if (FVector::DistSquared(A, B) < TAUT_ROPE_SHAPE_EDGE_RAY_INCREMENT_DISTANCE_SQUARED)
+		{
+			return;
+		}
+		const FVector Middle = (A + B) * 0.5f;
+		FHitResult NewHitResultA = FHitResult();
+		FHitResult NewHitResultB = FHitResult();
+		NewHitResultA.Distance = FLT_MAX;
+		NewHitResultB.Distance = FLT_MAX;
+
+		for (UPrimitiveComponent* OtherPrimComp : OtherPrimComps)
+		{
+			FHitResult ItrHitResultA;
+			FHitResult ItrHitResultB;
+			const bool bHitA = OtherPrimComp->LineTraceComponent(ItrHitResultA, Middle, A, TraceParams);
+			const bool bHitB = OtherPrimComp->LineTraceComponent(ItrHitResultB, Middle, B, TraceParams);
+			if (!bHitA && !bHitB)
+			{
+				continue;
+			}
+
+			if (bHitA && (ItrHitResultA.bStartPenetrating || ItrHitResultA.Distance < SMALL_NUMBER))
+			{
+				// if one ray starts inside other shape, the other should too, since they both originate from Middle.
+				ensure(bHitB && (ItrHitResultB.bStartPenetrating || ItrHitResultB.Distance < SMALL_NUMBER));
+				NewHitResultA = ItrHitResultA;
+				NewHitResultB = ItrHitResultB;
+				NewHitResultA.Distance = -1.f;
+				NewHitResultB.Distance = -1.f;
+				break;
+			}
+			if (bHitA && ItrHitResultA.Distance < NewHitResultA.Distance)
+			{
+				NewHitResultA = ItrHitResultA;
+			}
+			if (bHitB && ItrHitResultB.Distance < NewHitResultB.Distance)
+			{
+				NewHitResultB = ItrHitResultB;
+			}
+		}
+
+		NewHitResultA.Location = Middle;
+		NewHitResultB.Location = Middle;
+		if (NewHitResultA.Distance > 0.f && NewHitResultB.Distance > 0.f)
+		{
+			if (NewHitResultA.Distance == FLT_MAX)
+			{
+				NewHitResultA.Location = A;
+			}
+			else
+			{
+				NewHitResultA.Location = (Middle + (A - Middle).GetSafeNormal() * (NewHitResultA.Distance + TAUT_ROPE_DISTANCE_TOLERANCE));
+			}
+
+			if (NewHitResultB.Distance == FLT_MAX)
+			{
+				NewHitResultB.Location = B;
+			}
+			else
+			{
+				NewHitResultB.Location = (Middle + (B - Middle).GetSafeNormal() * (NewHitResultB.Distance + TAUT_ROPE_DISTANCE_TOLERANCE));
+			}
+			const int32 VertIndexA = FindOrAddVertex(NewHitResultA.Location, Vertices);
+			const int32 VertIndexB = FindOrAddVertex(NewHitResultB.Location, Vertices);
+			Edges.Add(FIntVector2(VertIndexA, VertIndexB));
+			EdgeRotations.Add(EdgeRotation);
+		}
+		CreateIntermedateEdges(LastHitResultA, NewHitResultA, EdgeRotation, OtherPrimComps, TraceParams);
+		CreateIntermedateEdges(NewHitResultB, LastHitResultB, EdgeRotation, OtherPrimComps, TraceParams);
+	};
 
 	void FRopeCollisionShape::PopulateVertToEdges()
 	{
@@ -148,52 +261,6 @@ namespace TautRope
 			}
 		}
 	}
-
-	void FRopeCollisionShape::RaycastAlongIntactShapeEdges(
-		const FRopeCollisionShape& IntactShape
-		, const TArray<UPrimitiveComponent*>& OtherPrimComps
-		, TArray<FVector2f>& OutEdgeRayDistances
-	) const
-	{
-		// FLT_MAX represents no ray-intersections
-		OutEdgeRayDistances.Init(FVector2f(FLT_MAX, FLT_MAX), IntactShape.Edges.Num());
-
-		FHitResult LatestHitResult;
-		FCollisionQueryParams TraceParams = FCollisionQueryParams();
-		for (int32 EdgeIndex = 0; EdgeIndex < IntactShape.Edges.Num(); ++EdgeIndex)
-		{
-			const FIntVector2& Edge = IntactShape.Edges[EdgeIndex];
-			FVector2f& EdgeRayDistance = OutEdgeRayDistances[EdgeIndex];
-			const FVector& VertA = IntactShape.Vertices[Edge.X];
-			const FVector& VertB = IntactShape.Vertices[Edge.Y];
-			for (UPrimitiveComponent* OtherPrimComp : OtherPrimComps)
-			{
-				if (!OtherPrimComp->LineTraceComponent(LatestHitResult, VertA, VertB, TraceParams))
-				{
-					continue;
-				}
-				if (LatestHitResult.bStartPenetrating || LatestHitResult.Distance < SMALL_NUMBER)
-				{
-					EdgeRayDistance.X = -1.f;
-				}
-				else if (LatestHitResult.Distance < EdgeRayDistance.X)
-				{
-					EdgeRayDistance.X = LatestHitResult.Distance;
-				}
-
-				ensure(OtherPrimComp->LineTraceComponent(LatestHitResult, VertB, VertA, TraceParams));
-
-				if (LatestHitResult.bStartPenetrating || LatestHitResult.Distance < SMALL_NUMBER)
-				{
-					EdgeRayDistance.Y = -1.f;
-				}
-				else if (LatestHitResult.Distance < EdgeRayDistance.Y)
-				{
-					EdgeRayDistance.Y = LatestHitResult.Distance;
-				}
-			}
-		}
-	};
 
 	int32 FRopeCollisionShape::FindOrAddVertex(const FVector& NewVert, TArray<FVector>& InOutVerts) const
 	{
@@ -255,29 +322,19 @@ namespace TautRope
 			DrawDebugLine(
 				World
 				, Center
-				, Center + EdgeRotations[EdgeIndex].GetUpVector() * 5.f
+				, Center + EdgeRotations[EdgeIndex].GetUpVector() * FVector::Dist(EdgeVertA, EdgeVertB) * 0.05f
 				, FColor::Yellow
 			);
 		}
 		for (int32 VertIndex = 0; VertIndex < Vertices.Num(); ++VertIndex)
 		{
-			const FVector& Vert = Vertices[VertIndex];
 			DrawDebugSphere(
 				World
-				, Vert
-				, 1.f
+				, Vertices[VertIndex]
+				, 0.5f
 				, 4
-				, FColor::Red
+				, IsCornerVertex(VertIndex) ? FColor::Red : FColor::Yellow
 			);
-			for (int32 EdgeIndex : VertToEdges[VertIndex])
-			{
-				DrawDebugLine(
-					World
-					, Vert
-					, Vert + EdgeRotations[EdgeIndex].GetUpVector() * 5.f
-					, FColor::Yellow
-				);
-			}
 		}
 	};
 #endif // TAUT_ROPE_DEBUG_DRAWING

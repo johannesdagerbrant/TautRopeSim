@@ -35,14 +35,25 @@ namespace TautRope
 	private:
 		TBitArray<> IsCornerVertexList;
 
-		void PopulateVertToEdges();
 
-		void RaycastAlongIntactShapeEdges(
-			const FRopeCollisionShape& IntactShape
+		void MakeInitialHitResults(
+			FHitResult& InitHitResultA
+			, FHitResult& InitHitResultB
+			, const FVector& A
+			, const FVector& B
 			, const TArray<UPrimitiveComponent*>& OtherPrimComps
-			, TArray<FVector2f>& OutEdgeRayDistances
+			, const FCollisionQueryParams& TraceParams = FCollisionQueryParams()
 		) const;
 
+		void CreateIntermedateEdges(
+			const FHitResult& LastHitResultA
+			, const FHitResult& LastHitResultB
+			, const FQuat& EdgeRotation
+			, const TArray<UPrimitiveComponent*>& OtherPrimComps
+			, const FCollisionQueryParams& TraceParams = FCollisionQueryParams()
+		);
+
+		void PopulateVertToEdges();
 		int32 FindOrAddVertex(const FVector& NewVert, TArray<FVector>& Verts) const;
 		int32 AddUniqueEdge(int32 V1, int32 V2, TArray<FIntVector2>& InOutEdges) const;
 		int32 AddUniqueTriangle(int32 V1, int32 V2, int32 V3, TArray<FIntVector>& InOutTriangles) const;
