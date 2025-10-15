@@ -1,13 +1,12 @@
 ﻿
 #include "TautRopeHelpersVertexHandling.h"
-#include "TautRopeCollisionShape.h"
 #include "TautRopePoint.h"
 
 namespace TautRope
 {
 	TBitArray<> GetAdjacentPointsOnSameVertexCone(
 		const TArray<FPoint>& RopePoints
-		, const TArray<FRopeCollisionShape>& NearbyShapes
+		, const TArray<FTautRopeCollisionShape>& NearbyShapes
 	)
 	{
 		TBitArray<> ToRemove;
@@ -19,8 +18,8 @@ namespace TautRope
 			{
 				continue;
 			}
-			const TautRope::FRopeCollisionShape& Shape = NearbyShapes[PointAtVert.ShapeIndex];
-			const TArray<int32>& AdjacentEdges = Shape.VertToEdges[PointAtVert.VertIndex];
+			const FTautRopeCollisionShape& Shape = NearbyShapes[PointAtVert.ShapeIndex];
+			const TArray<int32>& AdjacentEdges = Shape.VertToEdges[PointAtVert.VertIndex].Edges;
 
 			int32 GroupStart = i;
 			for (int32 j = i - 1; j >= 0; --j)
@@ -61,7 +60,7 @@ namespace TautRope
 
 	void LetPointsOnVertexSlideOntoNewEdge(
 		TArray<FPoint>& RopePoints
-		, const TArray<FRopeCollisionShape>& NearbyShapes
+		, const TArray<FTautRopeCollisionShape>& NearbyShapes
 	)
 	{
 		for (int32 i = 1; i < RopePoints.Num() - 1; ++i)
@@ -75,7 +74,7 @@ namespace TautRope
 			const FVector& LocationB = PointB.Location;
 			const FVector& LocationC = RopePoints[i + 1].Location;
 
-			const TautRope::FRopeCollisionShape& Shape = NearbyShapes[PointB.ShapeIndex];
+			const FTautRopeCollisionShape& Shape = NearbyShapes[PointB.ShapeIndex];
 			const FIntVector2& FromEdge = Shape.Edges[PointB.EdgeIndex];
 			const FVector& FromEdgeVertX = Shape.Vertices[FromEdge.X];
 			const FVector& FromEdgeVertY = Shape.Vertices[FromEdge.Y];
@@ -101,7 +100,7 @@ namespace TautRope
 			const FVector& VertexLocation = Shape.Vertices[PointB.VertIndex];
 			int32 MostOffendingEdgeIndex = INDEX_NONE;
 			float MostOffendingEdgeDot = 0.f;
-			const TArray<int32>& AdjacentEdges = Shape.VertToEdges[PointB.VertIndex];
+			const TArray<int32>& AdjacentEdges = Shape.VertToEdges[PointB.VertIndex].Edges;
 			for (const int32 AdjacentEdgeIndex : AdjacentEdges)
 			{
 				const FIntVector2& AdjacentEdge = Shape.Edges[AdjacentEdgeIndex];

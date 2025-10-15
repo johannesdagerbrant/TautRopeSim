@@ -11,21 +11,15 @@ namespace TautRope
 		, const FQuat& EdgeRotation
 	)
 	{
-		// --------------------------------------------------------------------
-		// 1. Build edge-local basis from rotation
-		// --------------------------------------------------------------------
 		const FVector PlaneForward = EdgeRotation.GetForwardVector();   // local X
 		const FVector PlaneDown = -EdgeRotation.GetUpVector();       // local -Z
 		const FVector PlaneNormal = FVector::CrossProduct(PlaneForward, PlaneDown).GetSafeNormal();
 
-		// --------------------------------------------------------------------
-		// 3. Signed distances of neighbors relative to the plane
-		// --------------------------------------------------------------------
 		const float DistA = FVector::DotProduct(PointLocationA - PointLocationB, PlaneNormal);
 		const float DistC = FVector::DotProduct(PointLocationC - PointLocationB, PlaneNormal);
 
-		// If both points are clearly in front of the plane, no wrapping
-		if (DistA > TAUT_ROPE_DISTANCE_TOLERANCE && DistC > TAUT_ROPE_DISTANCE_TOLERANCE)
+		// If both points are clearly on the same side, not wrapping
+		if (DistA * DistC > TAUT_ROPE_DISTANCE_TOLERANCE)
 		{
 			return false;
 		}

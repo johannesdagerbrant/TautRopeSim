@@ -6,7 +6,7 @@ namespace TautRope
 {
 	struct FHitData;
 
-	struct TAUTROPESIM_API FPoint
+	struct TAUTROPE_API FPoint
 	{
 		FPoint(const FVector& InLocation);
 		FPoint(const FHitData& HitData);

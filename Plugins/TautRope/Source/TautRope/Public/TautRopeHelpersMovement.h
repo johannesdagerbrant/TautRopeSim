@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "TautRopeCollisionShape.h"
 
 namespace TautRope
 {
@@ -19,16 +20,15 @@ namespace TautRope
 	};
 
 	struct FPoint;
-	struct FRopeCollisionShape;
 
 	TArray<FMovementGroup> GetMovementGroups(
 		const TArray<FPoint>& RopePoints
-		, const TArray<FRopeCollisionShape>& NearbyShapes
+		, const TArray<FTautRopeCollisionShape>& NearbyShapes
 	);
 
 	TArray<int32> GetCandidateVerts(
 		const FPoint& P,
-		const FRopeCollisionShape& Shape
+		const FTautRopeCollisionShape& Shape
 	);
 
 	FVector FindMinDistancePointBetweenABOnLineXY(

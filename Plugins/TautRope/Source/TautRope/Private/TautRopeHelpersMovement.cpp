@@ -1,6 +1,5 @@
 
 #include "TautRopeHelpersMovement.h"
-#include "TautRopeCollisionShape.h"
 #include "TautRopePoint.h"
 
 namespace TautRope
@@ -17,7 +16,7 @@ namespace TautRope
 
     TArray<FMovementGroup> GetMovementGroups(
         const TArray<FPoint>& RopePoints,
-        const TArray<FRopeCollisionShape>& NearbyShapes
+        const TArray<FTautRopeCollisionShape>& NearbyShapes
     )
     {
         TArray<FMovementGroup> MovementGroups;
@@ -37,7 +36,7 @@ namespace TautRope
             FMovementGroup& CurrentGroup = MovementGroups.Last();
             CurrentGroup.LastPointIndex = i;
 
-            const FRopeCollisionShape& Shape = NearbyShapes[Point.ShapeIndex];
+            const FTautRopeCollisionShape& Shape = NearbyShapes[Point.ShapeIndex];
             const TArray<int32> CandidateVerts = GetCandidateVerts(Point, Shape);
             const int32 GroupVertIndex = CurrentGroup.VertIndex;
 
@@ -67,7 +66,7 @@ namespace TautRope
         return MovementGroups;
     }
 
-    TArray<int32> GetCandidateVerts(const FPoint& Point, const FRopeCollisionShape& Shape)
+    TArray<int32> GetCandidateVerts(const FPoint& Point, const FTautRopeCollisionShape& Shape)
     {
         if (Point.VertIndex != INDEX_NONE)
         {
@@ -122,6 +121,6 @@ namespace TautRope
 			const float r = rhoA / (rhoA + rhoB);
 			OutDistAlongEdge = (1.0f - r) * Alpha + r * Beta;
 		}
-		return LineX + EdgeDir * FMath::Clamp(OutDistAlongEdge, 0.f, OutEdgeLength);
+		return LineX + EdgeDir * OutDistAlongEdge;
 	}
 }

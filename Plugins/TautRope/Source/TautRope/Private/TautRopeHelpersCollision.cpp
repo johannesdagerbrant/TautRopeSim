@@ -9,7 +9,7 @@ namespace TautRope
 	(
 		TArray<FPoint>& RopePoints
 		, const int32 RemovePointIndex
-		, const TArray<FRopeCollisionShape>& Shapes
+		, const TArray<FTautRopeCollisionShape>& Shapes
 #if TAUT_ROPE_DEBUG_DRAWING
 		, const UWorld* World
 		, const bool bIsDebugDrawingActive
@@ -93,7 +93,7 @@ namespace TautRope
 		const FVector& OriginLocationB,
 		const FVector& TargetLocationA,
 		const FVector& TargetLocationB,
-		const TArray<FRopeCollisionShape>& Shapes,
+		const TArray<FTautRopeCollisionShape>& Shapes,
 		const int32 RopePointIndex
 #if TAUT_ROPE_DEBUG_DRAWING
 		, const UWorld* World
@@ -105,7 +105,7 @@ namespace TautRope
 		// First perform triangle sweep for A-movement
 		for (int32 ShapeIndex = 0; ShapeIndex < Shapes.Num(); ++ShapeIndex)
 		{
-			const FRopeCollisionShape& Shape = Shapes[ShapeIndex];
+			const FTautRopeCollisionShape& Shape = Shapes[ShapeIndex];
 			SweepSegmentTriangleAgainstShape(
 				OriginLocationA,	// TriA
 				TargetLocationA,	// TriB
@@ -149,7 +149,7 @@ namespace TautRope
 		// Perform triangle sweep for B-movement
 		for (int32 ShapeIndex = 0; ShapeIndex < Shapes.Num(); ++ShapeIndex)
 		{
-			const FRopeCollisionShape& Shape = Shapes[ShapeIndex];
+			const FTautRopeCollisionShape& Shape = Shapes[ShapeIndex];
 			SweepSegmentTriangleAgainstShape(
 				OriginLocationB,	// TriA
 				TargetLocationB,	// TriB
@@ -195,7 +195,7 @@ namespace TautRope
 		const FVector& FromCorner,
 		const FVector& ToCorner,
 		const FVector& SupportCorner,
-		const FRopeCollisionShape& Shape,
+		const FTautRopeCollisionShape& Shape,
 		const int32 ShapeIndex,
 		const int32 ShapeIndexPointA,
 		const int32 ShapeIndexPointB,
@@ -215,7 +215,7 @@ namespace TautRope
 				if (EdgeIndex == EdgeIndexPointA)
 					continue;
 
-				if (VertIndexPointA != INDEX_NONE && Shape.VertToEdges[VertIndexPointA].Contains(EdgeIndex))
+				if (VertIndexPointA != INDEX_NONE && Shape.VertToEdges[VertIndexPointA].Edges.Contains(EdgeIndex))
 					continue;
 			}
 
@@ -224,7 +224,7 @@ namespace TautRope
 				if (EdgeIndex == EdgeIndexPointB)
 					continue;
 
-				if (VertIndexPointB != INDEX_NONE && Shape.VertToEdges[VertIndexPointB].Contains(EdgeIndex))
+				if (VertIndexPointB != INDEX_NONE && Shape.VertToEdges[VertIndexPointB].Edges.Contains(EdgeIndex))
 					continue;
 			}
 
@@ -263,7 +263,7 @@ namespace TautRope
 		const FVector& FromCorner
 		, const FVector& ToCorner
 		, const FVector& SupportCorner
-		, const FRopeCollisionShape& Shape
+		, const FTautRopeCollisionShape& Shape
 		, const int32 ShapeIndex
 		, const TArray<FIntVector2>& IgnoredEdges
 		, FHitData& OutHitData

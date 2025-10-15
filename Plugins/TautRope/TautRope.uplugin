@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "TautRope",
+	"Description": "A plugin for the simulation of taut rope.",
+	"Category": "Other",
+	"CreatedBy": "Hitbox Games AB",
+	"CreatedByURL": "https://www.hitboxgames.se/",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "TautRope",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

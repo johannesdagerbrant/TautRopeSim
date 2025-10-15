@@ -1,4 +1,5 @@
 ﻿#include "TautRopeActor.h"
+#include "TautRopeCollisionVolumeActor.h"
 
 #include "TautRopeHelpersCollision.h"
 #include "TautRopeHelpersMovement.h"
@@ -29,15 +30,6 @@ static TAutoConsoleVariable<int32> CVarDrawDebugRopeTouchedEdges(
 	TEXT("TautRope.DrawDebugRopeTouchedEdges"),
 	0,
 	TEXT("Draw rope touched shape edges debug visualization.\n")
-	TEXT("0: Off\n")
-	TEXT("1: On"),
-	ECVF_Cheat
-);
-
-static TAutoConsoleVariable<int32> CVarDrawDebugRopeShapes(
-	TEXT("TautRope.DrawDebugRopeShapes"),
-	0,
-	TEXT("Draw rope collision shapes debug visualization.\n")
 	TEXT("0: Off\n")
 	TEXT("1: On"),
 	ECVF_Cheat
@@ -104,54 +96,23 @@ void ATautRopeActor::BeginPlay()
 
     const float SearchRadius = 1000000.f;
 
-    TArray<FOverlapResult> Overlaps;
-    GetWorld()->OverlapMultiByObjectType(
-        Overlaps,
-        GetActorLocation(),
-        FQuat::Identity,
-		FCollisionObjectQueryParams(ECC_WorldStatic),
-		FCollisionShape::MakeSphere(SearchRadius)
+    TArray<AActor*> OverlappingActors;
+    UKismetSystemLibrary::SphereOverlapActors(
+        GetWorld(),
+		StartPoint->GetComponentLocation(),
+		MaxLength,
+		TArray<TEnumAsByte<EObjectTypeQuery>>(), // leave empty to include all
+        ATautRopeCollisionVolumeActor::StaticClass(),
+        TArray<AActor*>(), // optional ignore actors
+        OverlappingActors
     );
 
-	TArray<UPrimitiveComponent*> PrimComponents;
-	PrimComponents.Reserve(Overlaps.Num());
-	for (const FOverlapResult& Result : Overlaps)
-	{
-		UPrimitiveComponent* PrimComp = Result.Component.Get();
-		if (IsValid(PrimComp))
-		{
-			PrimComponents.Add(PrimComp);
-		}
-	}
-
-	NearbyShapes.Empty();
-    for (UPrimitiveComponent* PrimComp : PrimComponents)
+    for (AActor* Actor : OverlappingActors)
     {
-        const UBodySetup* BodySetup = nullptr;
-		const UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(PrimComp);
-        if (IsValid(StaticMeshComponent))
+        const ATautRopeCollisionVolumeActor* TautRopeCollisionVolumeActor = Cast<ATautRopeCollisionVolumeActor>(Actor);
+        if (IsValid(TautRopeCollisionVolumeActor))
         {
-            if (StaticMeshComponent->GetStaticMesh())
-            {
-                BodySetup = StaticMeshComponent->GetStaticMesh()->GetBodySetup();
-            }
-        }
-        else
-        {
-			// There is no const verson of GetBodySetup for UPrimitiveComponent
-			UPrimitiveComponent* WritablePrimComp = const_cast<UPrimitiveComponent*>(PrimComp);
-            BodySetup = WritablePrimComp->GetBodySetup();
-        }
-		if (!IsValid(BodySetup))
-		{
-			continue;
-		}
-		TArray<UPrimitiveComponent*> OtherPrimComponents = TArray(PrimComponents);
-		OtherPrimComponents.Remove(PrimComp);
-        for (const FKConvexElem& Convex : BodySetup->AggGeom.ConvexElems)
-        {
-			TautRope::FRopeCollisionShape Shape = TautRope::FRopeCollisionShape(Convex, PrimComp, OtherPrimComponents);
-			NearbyShapes.Add(MoveTemp(Shape));
+			NearbyShapes.Append(TautRopeCollisionVolumeActor->GetStaticShapes());
         }
     }
 
@@ -168,13 +129,15 @@ void ATautRopeActor::Tick(float DeltaTime)
 
 	TArray<FVector> TargetPoints = MovementPhase();
 	CollisionPhase(TargetPoints);
-	// VertexPhase();
 	PruningPhase();
 
 #if TAUT_ROPE_DEBUG_DRAWING
 	DrawDebug();
 #endif // TAUT_ROPE_DEBUG_DRAWING
 }
+
+// Used to get a normalized vector inbetween two unit length orthogonal vectors.
+constexpr float INV_SQRT2 = 0.70710678f; 
 
 TArray<FVector> ATautRopeActor::MovementPhase()
 {
@@ -200,7 +163,7 @@ TArray<FVector> ATautRopeActor::MovementPhase()
 		}
 		const FVector& LocationA = RopeTargetLocations[i - 1];
 		const FVector& LocationC = RopeTargetLocations[i + 1];
-		const TautRope::FRopeCollisionShape& Shape = NearbyShapes[PointB.ShapeIndex];
+		const FTautRopeCollisionShape& Shape = NearbyShapes[PointB.ShapeIndex];
 		const FIntVector2& Edge = Shape.Edges[PointB.EdgeIndex];
 		const bool bIsEdgeCornerAtVertexA = NearbyShapes[PointB.ShapeIndex].IsCornerVertex(Edge.X);
 		const bool bIsEdgeCornerAtVertexB = NearbyShapes[PointB.ShapeIndex].IsCornerVertex(Edge.Y);
@@ -214,16 +177,32 @@ TArray<FVector> ATautRopeActor::MovementPhase()
 		if (!bIsEdgeCornerAtVertexA && OutDistAlongEdge < TAUT_ROPE_DISTANCE_TOLERANCE)
 		{
 			PointB.VertIndex = Edge.X;
-			const FVector Forward = (EdgeVertA - EdgeVertB).GetSafeNormal();
-			const FVector Up = Shape.EdgeRotations[PointB.EdgeIndex].GetUpVector();
-			RopeTargetLocations[i] = EdgeVertA + (Forward + Up).GetSafeNormal() * TAUT_ROPE_DISTANCE_TOLERANCE;
+			const FQuat& EdgeRotation = Shape.EdgeRotations[PointB.EdgeIndex];
+			RopeTargetLocations[i] = EdgeVertA + (EdgeRotation.GetUpVector() - EdgeRotation.GetForwardVector()) * INV_SQRT2 * TAUT_ROPE_VERTEX_CROSSING_OFFSET;
+
+			DrawDebugLine(
+				GetWorld()
+				, EdgeVertA
+				, RopeTargetLocations[i]
+				, FColor::Green
+				, false
+				, 5.f
+			);
 		}
 		else if (!bIsEdgeCornerAtVertexB && OutDistAlongEdge > OutEdgeLength - TAUT_ROPE_DISTANCE_TOLERANCE)
 		{
 			PointB.VertIndex = Edge.Y;
-			const FVector Forward = (EdgeVertB - EdgeVertA).GetSafeNormal();
-			const FVector Up = Shape.EdgeRotations[PointB.EdgeIndex].GetUpVector();
-			RopeTargetLocations[i] = EdgeVertB + (Forward + Up).GetSafeNormal() * TAUT_ROPE_DISTANCE_TOLERANCE;
+			const FQuat& EdgeRotation = Shape.EdgeRotations[PointB.EdgeIndex];
+			RopeTargetLocations[i] = EdgeVertB + (EdgeRotation.GetUpVector() + EdgeRotation.GetForwardVector()) * INV_SQRT2 * TAUT_ROPE_VERTEX_CROSSING_OFFSET;
+
+			DrawDebugLine(
+				GetWorld()
+				, EdgeVertB
+				, RopeTargetLocations[i]
+				, FColor::Green
+				, false
+				, 5.f
+			);
 		}
 		else
 		{
@@ -299,12 +278,6 @@ bool ATautRopeActor::CollisionPhase(TArray<FVector>& TargetRopePoints)
 	return false;
 }
 
-bool ATautRopeActor::VertexPhase()
-{
-	TautRope::LetPointsOnVertexSlideOntoNewEdge(RopePoints, NearbyShapes);
-	return true;
-}
-
 bool ATautRopeActor::PruningPhase()
 {
 	TBitArray<> PointsToRemove = TautRope::GetAdjacentPointsOnSameVertexCone(RopePoints, NearbyShapes);
@@ -317,7 +290,7 @@ bool ATautRopeActor::PruningPhase()
 		const TautRope::FPoint& LastPoint = RopePoints[i - 1];
 		const TautRope::FPoint& Point = RopePoints[i];
 		const TautRope::FPoint& NextPoint = RopePoints[i + 1];
-		const TautRope::FRopeCollisionShape& Shape = NearbyShapes[Point.ShapeIndex];
+		const FTautRopeCollisionShape& Shape = NearbyShapes[Point.ShapeIndex];
 		if (Point.ShapeIndex == LastPoint.ShapeIndex && Point.EdgeIndex == LastPoint.EdgeIndex)
 		{
 			PointsToRemove[i] = true;
@@ -366,11 +339,6 @@ void ATautRopeActor::DrawDebug() const
 	{
 		DrawDebugRopeTouchedShapeEdges();
 	}
-
-	if (CVarDrawDebugRopeShapes.GetValueOnGameThread() != 0)
-	{
-		DrawDebugRopeShapes();
-	}
 }
 
 void ATautRopeActor::DrawDebugRope() const
@@ -383,7 +351,7 @@ void ATautRopeActor::DrawDebugRope() const
 		FVector UpOffsetB = FVector::ZeroVector;
 		if (RopePoints[i].ShapeIndex != INDEX_NONE)
 		{
-			const TautRope::FRopeCollisionShape& ShapeA = NearbyShapes[RopePoints[i].ShapeIndex];
+			const FTautRopeCollisionShape& ShapeA = NearbyShapes[RopePoints[i].ShapeIndex];
 			UpOffsetA = ShapeA.EdgeRotations[RopePoints[i].EdgeIndex].GetUpVector() * TAUT_ROPE_DISTANCE_TOLERANCE;
 		}
 
@@ -391,7 +359,7 @@ void ATautRopeActor::DrawDebugRope() const
 		{
 			if (RopePoints[i + 1].ShapeIndex != INDEX_NONE)
 			{
-				const TautRope::FRopeCollisionShape& ShapeB = NearbyShapes[RopePoints[i + 1].ShapeIndex];
+				const FTautRopeCollisionShape& ShapeB = NearbyShapes[RopePoints[i + 1].ShapeIndex];
 				UpOffsetB = ShapeB.EdgeRotations[RopePoints[i + 1].EdgeIndex].GetUpVector() * TAUT_ROPE_DISTANCE_TOLERANCE;
 			}
 			DrawDebugLine(
@@ -422,7 +390,7 @@ void ATautRopeActor::DrawDebugRopeTouchedShapeEdges() const
 	{
 		if (RopePoints[i].ShapeIndex != INDEX_NONE)
 		{
-			const TautRope::FRopeCollisionShape& Shape = NearbyShapes[RopePoints[i].ShapeIndex];
+			const FTautRopeCollisionShape& Shape = NearbyShapes[RopePoints[i].ShapeIndex];
 			const int32 EdgeIndex = RopePoints[i].EdgeIndex;
 			const int32 EdgeVertIndexA = Shape.Edges[EdgeIndex].X;
 			const int32 EdgeVertIndexB = Shape.Edges[EdgeIndex].Y;
@@ -436,14 +404,6 @@ void ATautRopeActor::DrawDebugRopeTouchedShapeEdges() const
 				, FColor::Blue
 			);
 		}
-	}
-}
-
-void ATautRopeActor::DrawDebugRopeShapes() const
-{
-	for (const TautRope::FRopeCollisionShape& Shape : NearbyShapes)
-	{
-		Shape.DrawDebug(GetWorld());
 	}
 }
 #endif // TAUT_ROPE_DEBUG_DRAWING

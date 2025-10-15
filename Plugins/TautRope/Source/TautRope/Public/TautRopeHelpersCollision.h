@@ -6,7 +6,7 @@
 namespace TautRope
 {
 
-	struct TAUTROPESIM_API FHitData
+	struct TAUTROPE_API FHitData
 	{
 		bool bIsHit = false;
 		bool bIsHitOnFirstTriangleSweep = false;
@@ -24,7 +24,7 @@ namespace TautRope
 	(
 		TArray<FPoint>& RopePoints
 		, const int32 RemovePointIndex
-		, const TArray<FRopeCollisionShape>& Shapes
+		, const TArray<FTautRopeCollisionShape>& Shapes
 #if TAUT_ROPE_DEBUG_DRAWING
 		, const UWorld* World = nullptr
 		, const bool bIsDebugDrawingActive = false
@@ -39,7 +39,7 @@ namespace TautRope
 		, const FVector& OriginLocationB
 		, const FVector& TargetLocationA
 		, const FVector& TargetLocationB
-		, const TArray<FRopeCollisionShape>& Shapes
+		, const TArray<FTautRopeCollisionShape>& Shapes
 		, const int32 RopePointIndex
 #if TAUT_ROPE_DEBUG_DRAWING
 		, const UWorld* World
@@ -51,7 +51,7 @@ namespace TautRope
 		const FVector& TriA,
 		const FVector& TriB,
 		const FVector& TriC,
-		const FRopeCollisionShape& Shape,
+		const FTautRopeCollisionShape& Shape,
 		const int32 ShapeIndex,
 		const int32 ShapeIndexPointA,
 		const int32 ShapeIndexPointB,
@@ -67,7 +67,7 @@ namespace TautRope
 		const FVector& FromCorner
 		, const FVector& ToCorner
 		, const FVector& SupportCorner
-		, const FRopeCollisionShape& Shape
+		, const FTautRopeCollisionShape& Shape
 		, const int32 ShapeIndex
 		, const TArray<FIntVector2>& IgnoredEdges
 		, FHitData& OutHitData

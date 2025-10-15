@@ -7,8 +7,24 @@
 #include "TautRopePoint.h"
 #include "TautRopeActor.generated.h"
 
-UCLASS()
-class TAUTROPESIM_API ATautRopeActor : public AActor
+class ATautRopeCollisionVolumeActor;
+
+UCLASS(HideCategories = (
+	"Actor"
+	, "Input"
+	, "Replication"
+	, "Rendering"
+	, "HLOD"
+	, "Physics"
+	, "Collision"
+	, "Cooking"
+	, "Networking"
+	, "WorldPartition"
+	, "LevelInstance"
+	, "DataLayers"
+	)
+)
+class TAUTROPE_API ATautRopeActor : public AActor
 {
 	GENERATED_BODY()
 
@@ -21,23 +37,24 @@ protected:
 public:
 	virtual void Tick(float DeltaTime) override;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Taut Rope")
+	float MaxLength = 1000000.f;
+
 private:
 	TArray<FVector> MovementPhase();
 	bool CollisionPhase(TArray<FVector>& TargetRopePoints);
-	bool VertexPhase();
 	bool PruningPhase();
 
 #if TAUT_ROPE_DEBUG_DRAWING
 	void DrawDebug() const;
 	void DrawDebugRope() const;
 	void DrawDebugRopeTouchedShapeEdges() const;
-	void DrawDebugRopeShapes() const;
 #endif // TAUT_ROPE_DEBUG_DRAWING
 
-	UPROPERTY(VisibleAnywhere, Category = "Rope")
+	UPROPERTY(VisibleAnywhere, Category = "Taut Rope")
 	USceneComponent* StartPoint;
 
-	UPROPERTY(VisibleAnywhere, Category = "Rope")
+	UPROPERTY(VisibleAnywhere, Category = "Taut Rope")
 	USceneComponent* EndPoint;
 
 #if WITH_EDITORONLY_DATA
@@ -49,5 +66,5 @@ private:
 #endif
 
 	TArray<TautRope::FPoint> RopePoints;
-	TArray<TautRope::FRopeCollisionShape> NearbyShapes;
+	TArray<FTautRopeCollisionShape> NearbyShapes;
 };
