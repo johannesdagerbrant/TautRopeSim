@@ -2,12 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "TautRopeCollisionShape.h"
-#include "TautRopeConfig.h"
-#include "TautRopePoint.h"
 #include "TautRopeActor.generated.h"
 
 class ATautRopeCollisionVolumeActor;
+
+struct FTautRope;
 
 UCLASS(HideCategories = (
 	"Actor"
@@ -38,19 +37,9 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Taut Rope")
-	float MaxLength = 10000.f;
+	float MaxLength = 500.f;
 
 private:
-	TArray<FVector> MovementPhase();
-	bool CollisionPhase(TArray<FVector>& TargetRopePoints);
-	bool PruningPhase();
-
-#if TAUT_ROPE_DEBUG_DRAWING
-	void DrawDebug() const;
-	void DrawDebugRope() const;
-	void DrawDebugRopeTouchedShapeEdges() const;
-#endif // TAUT_ROPE_DEBUG_DRAWING
-
 	UPROPERTY(VisibleAnywhere, Category = "Taut Rope")
 	USceneComponent* StartPoint;
 
@@ -65,6 +54,5 @@ private:
 	class UBillboardComponent* EndPointBillboard;
 #endif
 
-	TArray<TautRope::FPoint> RopePoints;
-	TArray<FTautRopeCollisionShape> NearbyShapes;
+	FTautRope TautRope;
 };
