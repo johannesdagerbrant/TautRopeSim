@@ -38,7 +38,7 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Taut Rope")
-	float MaxLength = 1000000.f;
+	float MaxLength = 10000.f;
 
 private:
 	TArray<FVector> MovementPhase();

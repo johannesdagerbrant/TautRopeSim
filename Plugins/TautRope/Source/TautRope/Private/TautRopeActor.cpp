@@ -141,10 +141,28 @@ constexpr float INV_SQRT2 = 0.70710678f;
 
 TArray<FVector> ATautRopeActor::MovementPhase()
 {
+	ensure(RopePoints.Num() >= 2);
+
 	TArray<FVector> RopeTargetLocations;
+
 	RopeTargetLocations.SetNum(RopePoints.Num());
 	RopeTargetLocations[0] = StartPoint->GetComponentLocation();
-	RopeTargetLocations.Last() = EndPoint->GetComponentLocation();
+
+	float RopeDistanceToSecondLastPoint = 0.f;
+	for (int32 Index = 0; Index < RopePoints.Num() - 2; ++Index)
+	{
+		RopeDistanceToSecondLastPoint += FVector::Dist(
+			RopePoints[Index].Location
+			, RopePoints[Index + 1].Location
+		);
+	}
+	const float AvaliableDistanceTowardsEndPoint = MaxLength - RopeDistanceToSecondLastPoint;
+	const FVector SecondLastPointLocation = RopePoints[RopePoints.Num() - 2].Location;
+	const FVector EndPointLocation = EndPoint->GetComponentLocation();
+	const float DistanceToEndPoint = FVector::Dist(SecondLastPointLocation, EndPointLocation);
+	const float ToEndPointAlpha = FMath::Clamp(AvaliableDistanceTowardsEndPoint / DistanceToEndPoint, 0.f, 1.f);
+	const FVector LastPointLocation = FMath::Lerp(SecondLastPointLocation, EndPointLocation, ToEndPointAlpha);
+	RopeTargetLocations.Last() = LastPointLocation;
 	if (RopeTargetLocations.Num() == 2)
 	{
 		return RopeTargetLocations;
