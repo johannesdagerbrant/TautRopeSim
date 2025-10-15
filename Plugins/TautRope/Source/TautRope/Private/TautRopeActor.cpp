@@ -197,30 +197,12 @@ TArray<FVector> ATautRopeActor::MovementPhase()
 			PointB.VertIndex = Edge.X;
 			const FQuat& EdgeRotation = Shape.EdgeRotations[PointB.EdgeIndex];
 			RopeTargetLocations[i] = EdgeVertA + (EdgeRotation.GetUpVector() - EdgeRotation.GetForwardVector()) * INV_SQRT2 * TAUT_ROPE_VERTEX_CROSSING_OFFSET;
-
-			DrawDebugLine(
-				GetWorld()
-				, EdgeVertA
-				, RopeTargetLocations[i]
-				, FColor::Green
-				, false
-				, 5.f
-			);
 		}
 		else if (!bIsEdgeCornerAtVertexB && OutDistAlongEdge > OutEdgeLength - TAUT_ROPE_DISTANCE_TOLERANCE)
 		{
 			PointB.VertIndex = Edge.Y;
 			const FQuat& EdgeRotation = Shape.EdgeRotations[PointB.EdgeIndex];
 			RopeTargetLocations[i] = EdgeVertB + (EdgeRotation.GetUpVector() + EdgeRotation.GetForwardVector()) * INV_SQRT2 * TAUT_ROPE_VERTEX_CROSSING_OFFSET;
-
-			DrawDebugLine(
-				GetWorld()
-				, EdgeVertB
-				, RopeTargetLocations[i]
-				, FColor::Green
-				, false
-				, 5.f
-			);
 		}
 		else
 		{
