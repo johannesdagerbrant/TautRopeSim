@@ -121,6 +121,6 @@ namespace TautRope
 			const float r = rhoA / (rhoA + rhoB);
 			OutDistAlongEdge = (1.0f - r) * Alpha + r * Beta;
 		}
-		return LineX + EdgeDir * OutDistAlongEdge;
+		return LineX + EdgeDir * FMath::Clamp(OutDistAlongEdge, TAUT_ROPE_DISTANCE_TOLERANCE, OutEdgeLength - TAUT_ROPE_DISTANCE_TOLERANCE);
 	}
 }
