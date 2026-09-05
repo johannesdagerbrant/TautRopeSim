@@ -8,7 +8,9 @@ public class TautRopeSimTarget : TargetRules
 	public TautRopeSimTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Game;
-		DefaultBuildSettings = BuildSettingsVersion.V5;
+		DefaultBuildSettings = BuildSettingsVersion.V7;
+		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
+		WindowsPlatform.Compiler = WindowsCompiler.VisualStudio2026;
 
 		ExtraModuleNames.AddRange( new string[] { "TautRopeSim" } );
 	}

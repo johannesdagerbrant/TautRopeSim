@@ -3,6 +3,7 @@
 
 #include "TautRopeCollisionVolumeActor.h"
 
+#include "Engine/OverlapResult.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "PhysicsEngine/ConvexElem.h"
 
