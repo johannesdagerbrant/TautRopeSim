@@ -1,7 +1,7 @@
-﻿#include "TautRopeActor.h"
-#include "TautRope.h"
+#include "TautRopeActor.h"
 #include "TautRopeConfig.h"
 #include "TautRopeCollisionVolumeActor.h"
+#include "TautRopeDebugDraw.h"
 
 #include "Components/SceneComponent.h"
 #include "Components/BillboardComponent.h"
@@ -64,7 +64,14 @@ void ATautRopeActor::BeginPlay()
         const ATautRopeCollisionVolumeActor* TautRopeCollisionVolumeActor = Cast<ATautRopeCollisionVolumeActor>(Actor);
         if (IsValid(TautRopeCollisionVolumeActor))
         {
-			TautRope.AppendToNearbyShapes(TautRopeCollisionVolumeActor->GetStaticShapes());
+			const TConstArrayView<FTautRopeCollisionShape> Shapes = TautRopeCollisionVolumeActor->GetStaticShapes();
+			std::vector<TautRope::CollisionShape> CoreShapes;
+			CoreShapes.reserve(Shapes.Num());
+			for (const FTautRopeCollisionShape& Shape : Shapes)
+			{
+				CoreShapes.push_back(Shape.ToCore());
+			}
+			Rope.AppendToNearbyShapes(CoreShapes);
         }
     }
 }
@@ -72,17 +79,35 @@ void ATautRopeActor::BeginPlay()
 void ATautRopeActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	
-	TautRope.UpdateRope(
-		StartPoint->GetComponentLocation()
-		, EndPoint->GetComponentLocation()
-		, MaxLength
-#if TAUT_ROPE_DEBUG_DRAWING
-		, GetWorld()
-#endif // TAUT_ROPE_DEBUG_DRAWING
-		);
 
 #if TAUT_ROPE_DEBUG_DRAWING
-	TautRope.DrawDebug(GetWorld());
+	FTautRopeDebugDraw DebugDraw(GetWorld());
+	TautRope::IDebugDraw* const Debug = DebugDraw.IsUsable() ? &DebugDraw : nullptr;
+#else
+	TautRope::IDebugDraw* const Debug = nullptr;
+#endif
+
+	const FVector StartLocation = StartPoint->GetComponentLocation();
+	const FVector EndLocation = EndPoint->GetComponentLocation();
+
+	Rope.UpdateRope(
+		TautRope::Vec3(StartLocation.X, StartLocation.Y, StartLocation.Z)
+		, TautRope::Vec3(EndLocation.X, EndLocation.Y, EndLocation.Z)
+		, MaxLength
+		, Debug
+	);
+
+#if TAUT_ROPE_DEBUG_DRAWING
+	if (Debug != nullptr)
+	{
+		if (FTautRopeDebugDraw::WantsRope())
+		{
+			Rope.DrawDebugRope(*Debug);
+		}
+		if (FTautRopeDebugDraw::WantsRopeTouchedEdges())
+		{
+			Rope.DrawDebugRopeTouchedShapeEdges(*Debug);
+		}
+	}
 #endif // TAUT_ROPE_DEBUG_DRAWING
 }

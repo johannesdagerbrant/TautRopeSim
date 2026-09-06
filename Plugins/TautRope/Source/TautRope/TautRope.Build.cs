@@ -2,6 +2,9 @@
 
 using UnrealBuildTool;
 
+// The Unreal glue for the rope system: actors, shape extraction from UE
+// collision primitives, CVars and debug rendering. The simulation itself lives
+// in TautRopeCore, which knows nothing about Unreal.
 public class TautRope : ModuleRules
 {
 	public TautRope(ReadOnlyTargetRules Target) : base(Target)
@@ -12,11 +15,11 @@ public class TautRope : ModuleRules
 			new string[]
 			{
 				"Core",
-				// ... add other public dependencies that you statically link with here ...
+				"TautRopeCore"
 			}
 			);
-			
-		
+
+
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{

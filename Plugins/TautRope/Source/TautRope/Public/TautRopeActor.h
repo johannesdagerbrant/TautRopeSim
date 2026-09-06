@@ -2,11 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "TautRopeCore/Rope.h"
 #include "TautRopeActor.generated.h"
 
 class ATautRopeCollisionVolumeActor;
-
-struct FTautRope;
 
 UCLASS(HideCategories = (
 	"Actor"
@@ -54,5 +53,5 @@ private:
 	class UBillboardComponent* EndPointBillboard;
 #endif
 
-	FTautRope TautRope;
+	TautRope::Rope Rope;
 };

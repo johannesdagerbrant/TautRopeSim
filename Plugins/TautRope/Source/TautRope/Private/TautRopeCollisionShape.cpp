@@ -336,3 +336,45 @@ void FTautRopeCollisionShape::DrawDebug(const UWorld* World) const
 	}
 };
 #endif // TAUT_ROPE_DEBUG_DRAWING
+TautRope::CollisionShape FTautRopeCollisionShape::ToCore() const
+{
+	TautRope::CollisionShape Result;
+
+	Result.Vertices.reserve(Vertices.Num());
+	for (const FVector& Vertex : Vertices)
+	{
+		Result.Vertices.emplace_back(Vertex.X, Vertex.Y, Vertex.Z);
+	}
+
+	Result.Edges.reserve(Edges.Num());
+	for (const FIntVector2& Edge : Edges)
+	{
+		Result.Edges.emplace_back(Edge.X, Edge.Y);
+	}
+
+	Result.VertToEdges.reserve(VertToEdges.Num());
+	for (const FTautRopeCollisionShapeVertEdges& VertEdges : VertToEdges)
+	{
+		std::vector<TautRope::int32> CoreEdges;
+		CoreEdges.reserve(VertEdges.Edges.Num());
+		for (const int32 EdgeIndex : VertEdges.Edges)
+		{
+			CoreEdges.push_back(EdgeIndex);
+		}
+		Result.VertToEdges.push_back(MoveTemp(CoreEdges));
+	}
+
+	Result.EdgeRotations.reserve(EdgeRotations.Num());
+	for (const FQuat& Rotation : EdgeRotations)
+	{
+		Result.EdgeRotations.emplace_back(Rotation.X, Rotation.Y, Rotation.Z, Rotation.W);
+	}
+
+	Result.IsCornerVertexList.reserve(IsCornerVertexList.Num());
+	for (const bool bIsCorner : IsCornerVertexList)
+	{
+		Result.IsCornerVertexList.push_back(bIsCorner);
+	}
+
+	return Result;
+}

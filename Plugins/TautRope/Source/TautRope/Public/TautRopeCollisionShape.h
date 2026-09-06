@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "TautRopeConfig.h"
+#include "TautRopeCore/CollisionShape.h"
 
 #include "TautRopeCollisionShape.generated.h"
 
@@ -40,6 +41,10 @@ public:
 	{
 		return IsCornerVertexList[VertexIndex];
 	};
+
+	// The serialised UE-side data converted into the plain form the simulation
+	// consumes. Built once at BeginPlay; shapes are static.
+	TautRope::CollisionShape ToCore() const;
 
 	UPROPERTY()
 	TArray<FVector> Vertices;
