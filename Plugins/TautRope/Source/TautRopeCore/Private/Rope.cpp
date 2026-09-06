@@ -6,6 +6,7 @@
 #include "TautRopeCore/Movement.h"
 #include "TautRopeCore/Pruning.h"
 #include "TautRopeCore/VertexHandling.h"
+#include "TautRopeCore/Recording.h"
 
 #include <algorithm>
 
@@ -32,24 +33,74 @@ namespace TautRope
 		, const Vec3& EndLocation
 		, const float MaxLength
 		, IDebugDraw* Debug
+		, FrameCapture* Capture
 	)
 	{
+		if (Capture != nullptr)
+		{
+			Capture->Clear();
+		}
+
 		if (Num(RopePoints) < 2)
 		{
 			RopePoints.clear();
-			RopePoints.push_back(Point(StartLocation));
-			RopePoints.push_back(Point(EndLocation));
+			Point Start(StartLocation);
+			Start.Id = NextPointId++;
+			Point End(EndLocation);
+			End.Id = NextPointId++;
+			RopePoints.push_back(Start);
+			RopePoints.push_back(End);
+			if (Capture != nullptr)
+			{
+				CapturePoints(RopePoints, Capture->AfterMovement);
+				CapturePoints(RopePoints, Capture->AfterCollision);
+				CapturePoints(RopePoints, Capture->AfterPruning);
+			}
 			return;
 		}
 		// Move phase
 		std::vector<Vec3> TargetRopePoints = MovementPhase(StartLocation, EndLocation, MaxLength);
+		if (Capture != nullptr)
+		{
+			CapturePoints(RopePoints, Capture->AfterMovement);
+		}
 		// Collision phase
 		const bool bHadCollision = CollisionPhase(TargetRopePoints, Debug);
+		if (Capture != nullptr)
+		{
+			CapturePoints(RopePoints, Capture->AfterCollision);
+		}
 		// Pruning phase
 		const bool bWasPruned = PruningPhase(Debug);
+		if (Capture != nullptr)
+		{
+			CapturePoints(RopePoints, Capture->AfterPruning);
+		}
 
 		(void)bHadCollision;
 		(void)bWasPruned;
+	}
+
+	void Rope::RestoreState(const std::vector<RecordedPoint>& Points)
+	{
+		RopePoints.clear();
+		RopePoints.reserve(Points.size());
+		int32 MaxId = IndexNone;
+		for (const RecordedPoint& Recorded : Points)
+		{
+			Point Restored;
+			Restored.Location = Recorded.Location;
+			Restored.ShapeIndex = Recorded.ShapeIndex;
+			Restored.EdgeIndex = Recorded.EdgeIndex;
+			Restored.VertIndex = Recorded.VertIndex;
+			Restored.Id = Recorded.Id;
+			RopePoints.push_back(Restored);
+			if (Recorded.Id > MaxId)
+			{
+				MaxId = Recorded.Id;
+			}
+		}
+		NextPointId = MaxId + 1;
 	}
 
 	std::vector<Vec3> Rope::MovementPhase(
@@ -183,7 +234,9 @@ namespace TautRope
 			for (int32 i = Num(SegmentSweepHits) - 1; i >= 0; --i)
 			{
 				const HitData& Hit = SegmentSweepHits[i];
-				RopePoints.insert(RopePoints.begin() + Hit.RopePointIndex, Point(Hit));
+				Point Inserted(Hit);
+				Inserted.Id = NextPointId++;
+				RopePoints.insert(RopePoints.begin() + Hit.RopePointIndex, Inserted);
 				OriginRopePoints.insert(OriginRopePoints.begin() + Hit.RopePointIndex, Hit.Location);
 				TargetRopePoints.insert(TargetRopePoints.begin() + Hit.RopePointIndex, Hit.Location);
 			}
@@ -227,7 +280,7 @@ namespace TautRope
 		{
 			if (PointsToRemove[i])
 			{
-				SweepRemovePoint(RopePoints, i, NearbyShapes, Debug);
+				SweepRemovePoint(RopePoints, i, NearbyShapes, NextPointId, Debug);
 			}
 		}
 		return std::find(PointsToRemove.begin(), PointsToRemove.end(), true) != PointsToRemove.end();

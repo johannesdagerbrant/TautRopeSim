@@ -7,7 +7,7 @@ public class TautRopeCore : ModuleRules
 {
 	public TautRopeCore(ReadOnlyTargetRules Target) : base(Target)
 	{
-		PCHUsage = ModuleRules.PCHUsageMode.NoSharedPCHs;
+		PCHUsage = ModuleRules.PCHUsageMode.NoPCHs;
 		bRequiresImplementModule = false;
 
 		// Non-monolithic targets build each module as a DLL, so the simulation

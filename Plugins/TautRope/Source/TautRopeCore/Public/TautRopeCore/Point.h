@@ -17,5 +17,8 @@ namespace TautRope
 		int32 ShapeIndex = IndexNone;
 		int32 EdgeIndex = IndexNone;
 		int32 VertIndex = IndexNone;
+
+		// Stable for the lifetime of the point; assigned by Rope, never reused.
+		int32 Id = IndexNone;
 	};
 }

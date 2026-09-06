@@ -27,6 +27,7 @@ namespace TautRope
 		std::vector<Point>& RopePoints
 		, const int32 RemovePointIndex
 		, const std::vector<CollisionShape>& Shapes
+		, int32& InOutNextPointId
 		, IDebugDraw* Debug = nullptr
 	);
 

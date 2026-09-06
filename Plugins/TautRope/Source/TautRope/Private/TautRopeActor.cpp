@@ -2,6 +2,7 @@
 #include "TautRopeConfig.h"
 #include "TautRopeCollisionVolumeActor.h"
 #include "TautRopeDebugDraw.h"
+#include "TautRopeRecorder.h"
 
 #include "Components/SceneComponent.h"
 #include "Components/BillboardComponent.h"
@@ -48,6 +49,8 @@ void ATautRopeActor::BeginPlay()
 {
     Super::BeginPlay();
 
+    Recorder.SetLabel(GetName());
+
     TArray<AActor*> OverlappingActors;
     UKismetSystemLibrary::SphereOverlapActors(
         GetWorld(),
@@ -76,6 +79,12 @@ void ATautRopeActor::BeginPlay()
     }
 }
 
+void ATautRopeActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Recorder.Flush();
+	Super::EndPlay(EndPlayReason);
+}
+
 void ATautRopeActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -90,11 +99,15 @@ void ATautRopeActor::Tick(float DeltaTime)
 	const FVector StartLocation = StartPoint->GetComponentLocation();
 	const FVector EndLocation = EndPoint->GetComponentLocation();
 
+	TautRope::FrameCapture* const Capture =
+		Recorder.BeginFrame(Rope, StartLocation, EndLocation, MaxLength, DeltaTime);
+
 	Rope.UpdateRope(
 		TautRope::Vec3(StartLocation.X, StartLocation.Y, StartLocation.Z)
 		, TautRope::Vec3(EndLocation.X, EndLocation.Y, EndLocation.Z)
 		, MaxLength
 		, Debug
+		, Capture
 	);
 
 #if TAUT_ROPE_DEBUG_DRAWING

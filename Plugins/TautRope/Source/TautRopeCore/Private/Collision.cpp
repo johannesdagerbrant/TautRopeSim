@@ -10,6 +10,7 @@ namespace TautRope
 		std::vector<Point>& RopePoints
 		, const int32 RemovePointIndex
 		, const std::vector<CollisionShape>& Shapes
+		, int32& InOutNextPointId
 		, IDebugDraw* Debug
 	)
 	{
@@ -61,11 +62,17 @@ namespace TautRope
 				if (!bFoundIntersections)
 				{
 					bFoundIntersections = true;
-					RopePoints[RemovePointIndex] = Point(Hit);
+					// A new contact feature, so a new identity rather than the
+					// replaced point's.
+					Point Replacement(Hit);
+					Replacement.Id = InOutNextPointId++;
+					RopePoints[RemovePointIndex] = Replacement;
 				}
 				else
 				{
-					RopePoints.insert(RopePoints.begin() + RemovePointIndex, Point(Hit));
+					Point Inserted(Hit);
+					Inserted.Id = InOutNextPointId++;
+					RopePoints.insert(RopePoints.begin() + RemovePointIndex, Inserted);
 				}
 				FromLocation = Hit.OnSweepEdgeLocation;
 				ToLocation = RopePoints[RemovePointIndex - 1].Location;
