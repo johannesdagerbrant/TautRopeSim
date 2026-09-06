@@ -81,3 +81,6 @@ DerivedDataCache/*
 
 # CMake output for the standalone core + replay build
 Plugins/TautRope/Standalone/build/
+
+# Recordings and replay output are transient debug artifacts
+*.tautrope
