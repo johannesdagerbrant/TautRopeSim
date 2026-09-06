@@ -5,6 +5,7 @@
 
 #if TAUT_ROPE_DEBUG_DRAWING
 
+#include "TautRopeCore/CollisionShape.h"
 #include "TautRopeCore/DebugDraw.h"
 
 class UWorld;
@@ -31,5 +32,9 @@ public:
 private:
 	const UWorld* World = nullptr;
 };
+
+// Draws a collision shape: edges, per-edge up vectors, and vertices coloured by
+// whether they are corners.
+TAUTROPE_API void DrawCollisionShape(TautRope::IDebugDraw& Debug, const TautRope::CollisionShape& Shape);
 
 #endif // TAUT_ROPE_DEBUG_DRAWING

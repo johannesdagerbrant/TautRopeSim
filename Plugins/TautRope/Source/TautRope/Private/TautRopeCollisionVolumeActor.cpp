@@ -6,6 +6,9 @@
 #include "Engine/OverlapResult.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "PhysicsEngine/ConvexElem.h"
+#include "TautRopeDebugDraw.h"
+#include "TautRopeShapeBuilder.h"
+#include "TautRopeShapeSerialization.h"
 
 
 #if TAUT_ROPE_DEBUG_DRAWING
@@ -31,6 +34,12 @@ ATautRopeCollisionVolumeActor::ATautRopeCollisionVolumeActor()
 	PrimaryActorTick.bCanEverTick = false;
 	PrimaryActorTick.bStartWithTickEnabled = false;
 #endif // TAUT_ROPE_DEBUG_DRAWING
+}
+
+void ATautRopeCollisionVolumeActor::PostLoad()
+{
+	Super::PostLoad();
+	TautRopeShapeSerialization::Load(StaticShapes, SerializedShapes);
 }
 
 // Called when the game starts or when spawned
@@ -82,9 +91,10 @@ void ATautRopeCollisionVolumeActor::Tick(float DeltaTime)
 		}
 	}
 
-	for (const FTautRopeCollisionShape& Shape : StaticShapes)
+	FTautRopeDebugDraw DebugDraw(World);
+	for (const TautRope::CollisionShape& Shape : StaticShapes)
 	{
-		Shape.DrawDebug(World);
+		DrawCollisionShape(DebugDraw, Shape);
 	}
 }
 #endif // TAUT_ROPE_DEBUG_DRAWING
@@ -92,7 +102,7 @@ void ATautRopeCollisionVolumeActor::Tick(float DeltaTime)
 #if WITH_EDITOR
 void ATautRopeCollisionVolumeActor::PopulateStaticShapes()
 {
-	StaticShapes.Empty();
+	StaticShapes.clear();
 
 	const UWorld* World = GetWorld();
 	if (!IsValid(World))
@@ -158,9 +168,11 @@ void ATautRopeCollisionVolumeActor::PopulateStaticShapes()
 		OtherPrimComponents.Remove(PrimComp);
 		for (const FKConvexElem& Convex : BodySetup->AggGeom.ConvexElems)
 		{
-			FTautRopeCollisionShape Shape = FTautRopeCollisionShape(Convex, PrimComp, OtherPrimComponents);
-			StaticShapes.Add(MoveTemp(Shape));
+			StaticShapes.push_back(TautRopeShapeBuilder::Build(Convex, PrimComp, OtherPrimComponents));
 		}
 	}
+
+	TautRopeShapeSerialization::Save(StaticShapes, SerializedShapes);
+	MarkPackageDirty();
 }
 #endif // WITH_EDITOR

@@ -3,11 +3,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Containers/ArrayView.h"
 #include "TautRopeConfig.h"
-#include "TautRopeCollisionShape.h"
+#include "TautRopeCore/CollisionShape.h"
 #include "GameFramework/Actor.h"
 #include "Components/BoxComponent.h"
+
+#include <vector>
+
 #include "TautRopeCollisionVolumeActor.generated.h"
 
 UCLASS(HideCategories = ("Actor", "Input", "Replication", "Rendering", "HLOD", "Physics", "Collision", "Cooking", "Networking", "WorldPartition", "LevelInstance", "DataLayers"))
@@ -18,6 +20,8 @@ class TAUTROPE_API ATautRopeCollisionVolumeActor : public AActor
 public:	
 	// Sets default values for this actor's properties
 	ATautRopeCollisionVolumeActor();
+
+	virtual void PostLoad() override;
 
 protected:
 	// Called when the game starts or when spawned
@@ -34,8 +38,8 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Taut Rope Collision")
 	TObjectPtr<UBoxComponent> CollisionVolume;
 
-	/** Returns a const view of the static rope collision shapes found within the collision volume */
-	TConstArrayView<FTautRopeCollisionShape> GetStaticShapes() const { return StaticShapes; }
+	/** The static rope collision shapes found within the collision volume */
+	const std::vector<TautRope::CollisionShape>& GetStaticShapes() const { return StaticShapes; }
 
 #if WITH_EDITOR
 	// Expose a button in the details panel to populate StaticShapes from simple collision of primitives within the collision volume
@@ -44,7 +48,11 @@ public:
 #endif
 
 private:
-	// Stored data from simple collision of primitives within the collision volume
+	// Runtime form, rebuilt from SerializedShapes on load.
+	std::vector<TautRope::CollisionShape> StaticShapes;
+
+	// Persisted form. A blob rather than a mirrored USTRUCT, so the shape keeps a
+	// single definition -- in TautRopeCore.
 	UPROPERTY()
-	TArray<FTautRopeCollisionShape> StaticShapes;
+	TArray<uint8> SerializedShapes;
 };

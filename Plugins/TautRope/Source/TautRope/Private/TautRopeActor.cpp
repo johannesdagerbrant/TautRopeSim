@@ -67,14 +67,7 @@ void ATautRopeActor::BeginPlay()
         const ATautRopeCollisionVolumeActor* TautRopeCollisionVolumeActor = Cast<ATautRopeCollisionVolumeActor>(Actor);
         if (IsValid(TautRopeCollisionVolumeActor))
         {
-			const TConstArrayView<FTautRopeCollisionShape> Shapes = TautRopeCollisionVolumeActor->GetStaticShapes();
-			std::vector<TautRope::CollisionShape> CoreShapes;
-			CoreShapes.reserve(Shapes.Num());
-			for (const FTautRopeCollisionShape& Shape : Shapes)
-			{
-				CoreShapes.push_back(Shape.ToCore());
-			}
-			Rope.AppendToNearbyShapes(CoreShapes);
+			Rope.AppendToNearbyShapes(TautRopeCollisionVolumeActor->GetStaticShapes());
         }
     }
 }

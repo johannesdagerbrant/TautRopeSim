@@ -9,6 +9,8 @@ namespace TautRope
 	inline constexpr unsigned int ColorBlack = 0xFF000000u;
 	inline constexpr unsigned int ColorBlue = 0xFF0000FFu;
 	inline constexpr unsigned int ColorMagenta = 0xFFFF00FFu;
+	inline constexpr unsigned int ColorYellow = 0xFFFFFF00u;
+	inline constexpr unsigned int ColorRed = 0xFFFF0000u;
 
 	// Implemented by the UE glue. The simulation only emits primitives; whether
 	// anything is drawn, and in what world, is not core's concern. The replay

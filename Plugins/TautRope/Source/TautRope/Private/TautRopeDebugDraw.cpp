@@ -101,4 +101,28 @@ bool FTautRopeDebugDraw::WantsRopeTouchedEdges()
 	return CVarDrawDebugRopeTouchedEdges.GetValueOnGameThread() != 0;
 }
 
+void DrawCollisionShape(TautRope::IDebugDraw& Debug, const TautRope::CollisionShape& Shape)
+{
+	for (int32 EdgeIndex = 0; EdgeIndex < static_cast<int32>(Shape.Edges.size()); ++EdgeIndex)
+	{
+		const TautRope::Int2& Edge = Shape.Edges[EdgeIndex];
+		const TautRope::Vec3& EdgeVertA = Shape.Vertices[Edge.X];
+		const TautRope::Vec3& EdgeVertB = Shape.Vertices[Edge.Y];
+		Debug.Line(EdgeVertA, EdgeVertB, TautRope::ColorBlue);
+
+		const TautRope::Vec3 Center = (EdgeVertA + EdgeVertB) * 0.5;
+		const double Length = TautRope::Vec3::Dist(EdgeVertA, EdgeVertB) * 0.05;
+		Debug.Line(Center, Center + Shape.EdgeRotations[EdgeIndex].GetUpVector() * Length, TautRope::ColorYellow);
+	}
+	for (int32 VertIndex = 0; VertIndex < static_cast<int32>(Shape.Vertices.size()); ++VertIndex)
+	{
+		Debug.Sphere(
+			Shape.Vertices[VertIndex]
+			, 0.5
+			, 4
+			, Shape.IsCornerVertex(VertIndex) ? TautRope::ColorRed : TautRope::ColorYellow
+		);
+	}
+}
+
 #endif // TAUT_ROPE_DEBUG_DRAWING
