@@ -104,7 +104,7 @@ namespace
 	{
 		TautRope::Rope Rope;
 		Rope.AppendToNearbyShapes(Input.Shapes);
-		Rope.RestoreState(Input.InitialPoints);
+		Rope.RestoreState(Input.InitialPoints, Input.NextPointId);
 
 		TautRope::Recording Result;
 		// Carried over verbatim: the header describes the engine that captured
@@ -112,6 +112,7 @@ namespace
 		Result.EngineBuild = Input.EngineBuild;
 		Result.Shapes = Input.Shapes;
 		Result.InitialPoints = Input.InitialPoints;
+		Result.NextPointId = Input.NextPointId;
 		Result.Frames.resize(Input.Frames.size());
 
 		const auto Start = std::chrono::steady_clock::now();

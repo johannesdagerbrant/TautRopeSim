@@ -315,6 +315,10 @@ namespace TautRope
 
 		WritePoints(Out, "initial", InRecording.InitialPoints);
 
+		Out += "nextpointid ";
+		WriteInt(Out, InRecording.NextPointId);
+		Out += '\n';
+
 		Out += "frames ";
 		WriteInt(Out, static_cast<int32>(InRecording.Frames.size()));
 		Out += '\n';
@@ -499,6 +503,12 @@ namespace TautRope
 		if (!ReadPoints(Reader, "initial", OutRecording.InitialPoints))
 		{
 			OutError = "malformed initial points";
+			return false;
+		}
+
+		if (!Reader.Keyword("nextpointid") || !Reader.ReadInt(OutRecording.NextPointId))
+		{
+			OutError = "malformed next point id";
 			return false;
 		}
 

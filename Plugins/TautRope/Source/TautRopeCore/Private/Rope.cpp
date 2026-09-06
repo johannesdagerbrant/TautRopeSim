@@ -81,11 +81,10 @@ namespace TautRope
 		(void)bWasPruned;
 	}
 
-	void Rope::RestoreState(const std::vector<RecordedPoint>& Points)
+	void Rope::RestoreState(const std::vector<RecordedPoint>& Points, int32 InNextPointId)
 	{
 		RopePoints.clear();
 		RopePoints.reserve(Points.size());
-		int32 MaxId = IndexNone;
 		for (const RecordedPoint& Recorded : Points)
 		{
 			Point Restored;
@@ -95,12 +94,8 @@ namespace TautRope
 			Restored.VertIndex = Recorded.VertIndex;
 			Restored.Id = Recorded.Id;
 			RopePoints.push_back(Restored);
-			if (Recorded.Id > MaxId)
-			{
-				MaxId = Recorded.Id;
-			}
 		}
-		NextPointId = MaxId + 1;
+		NextPointId = InNextPointId;
 	}
 
 	std::vector<Vec3> Rope::MovementPhase(

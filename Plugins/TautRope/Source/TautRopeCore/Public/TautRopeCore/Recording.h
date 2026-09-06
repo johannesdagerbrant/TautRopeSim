@@ -65,6 +65,11 @@ namespace TautRope
 		// stateful, so a replay that starts from anything else diverges.
 		std::vector<RecordedPoint> InitialPoints;
 
+		// The point id allocator entering the first recorded frame. It cannot be
+		// inferred from InitialPoints: ids allocated to points that were pruned
+		// before recording started have already advanced the counter.
+		int32 NextPointId = 0;
+
 		std::vector<RecordedFrame> Frames;
 	};
 
@@ -76,5 +81,5 @@ namespace TautRope
 	TAUTROPE_CORE_API bool WriteRecording(const Recording& InRecording, const char* Path, std::string& OutError);
 	TAUTROPE_CORE_API bool ReadRecording(Recording& OutRecording, const char* Path, std::string& OutError);
 
-	inline constexpr int32 RecordingFormatVersion = 1;
+	inline constexpr int32 RecordingFormatVersion = 2;
 }

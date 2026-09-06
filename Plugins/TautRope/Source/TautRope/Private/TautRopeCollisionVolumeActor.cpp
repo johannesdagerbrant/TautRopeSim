@@ -10,6 +10,8 @@
 #include "TautRopeShapeBuilder.h"
 #include "TautRopeShapeSerialization.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogTautRopeVolume, Log, All);
+
 
 #if TAUT_ROPE_DEBUG_DRAWING
 // 0 = off, 1 = on
@@ -107,11 +109,13 @@ void ATautRopeCollisionVolumeActor::PopulateStaticShapes()
 	const UWorld* World = GetWorld();
 	if (!IsValid(World))
 	{
+		UE_LOG(LogTautRopeVolume, Warning, TEXT("%s: no world"), *GetName());
 		return;
 	}
 
 	if (!IsValid(CollisionVolume))
 	{
+		UE_LOG(LogTautRopeVolume, Warning, TEXT("%s: no collision volume component"), *GetName());
 		return;
 	}
 
@@ -130,8 +134,13 @@ void ATautRopeCollisionVolumeActor::PopulateStaticShapes()
 	);
 	if (Overlaps.IsEmpty())
 	{
+		UE_LOG(LogTautRopeVolume, Warning,
+			TEXT("%s: no WorldStatic primitives overlap the volume (centre %s, extent %s). Nothing to sample."),
+			*GetName(), *BoxCenter.ToCompactString(), *BoxExtent.ToCompactString());
 		return;
 	}
+
+	UE_LOG(LogTautRopeVolume, Display, TEXT("%s: %d overlapping primitives"), *GetName(), Overlaps.Num());
 
 	TArray<UPrimitiveComponent*> PrimComponents;
 	PrimComponents.Reserve(Overlaps.Num());
@@ -162,17 +171,54 @@ void ATautRopeCollisionVolumeActor::PopulateStaticShapes()
 		}
 		if (!IsValid(BodySetup))
 		{
+			UE_LOG(LogTautRopeVolume, Verbose, TEXT("  %s: no body setup, skipped"), *PrimComp->GetName());
 			continue;
 		}
+		UE_LOG(LogTautRopeVolume, Display,
+			TEXT("  %s: %d convex, %d box, %d sphere, %d capsule"),
+			*PrimComp->GetName(),
+			BodySetup->AggGeom.ConvexElems.Num(),
+			BodySetup->AggGeom.BoxElems.Num(),
+			BodySetup->AggGeom.SphereElems.Num(),
+			BodySetup->AggGeom.SphylElems.Num());
 		TArray<UPrimitiveComponent*> OtherPrimComponents = TArray(PrimComponents);
 		OtherPrimComponents.Remove(PrimComp);
 		for (const FKConvexElem& Convex : BodySetup->AggGeom.ConvexElems)
 		{
 			StaticShapes.push_back(TautRopeShapeBuilder::Build(Convex, PrimComp, OtherPrimComponents));
 		}
+		// Boxes are convex hulls with eight corners, so they are sampled too.
+		for (const FKBoxElem& Box : BodySetup->AggGeom.BoxElems)
+		{
+			StaticShapes.push_back(TautRopeShapeBuilder::Build(Box, PrimComp, OtherPrimComponents));
+		}
 	}
 
-	TautRopeShapeSerialization::Save(StaticShapes, SerializedShapes);
-	MarkPackageDirty();
+	int32 TotalVertices = 0;
+	int32 TotalEdges = 0;
+	for (const TautRope::CollisionShape& Shape : StaticShapes)
+	{
+		TotalVertices += static_cast<int32>(Shape.Vertices.size());
+		TotalEdges += static_cast<int32>(Shape.Edges.size());
+	}
+
+	if (!StaticShapes.empty())
+	{
+		TautRopeShapeSerialization::Save(StaticShapes, SerializedShapes);
+		MarkPackageDirty();
+	}
+
+	if (StaticShapes.empty())
+	{
+		UE_LOG(LogTautRopeVolume, Warning,
+			TEXT("%s: %d primitives overlapped but produced no shapes. Convex and box simple collision are sampled; sphere and capsule are not."),
+			*GetName(), PrimComponents.Num());
+	}
+	else
+	{
+		UE_LOG(LogTautRopeVolume, Display,
+			TEXT("%s: built %d shapes (%d vertices, %d edges) from %d primitives. Save the level to keep them."),
+			*GetName(), static_cast<int32>(StaticShapes.size()), TotalVertices, TotalEdges, PrimComponents.Num());
+	}
 }
 #endif // WITH_EDITOR

@@ -4,6 +4,7 @@
 #include "TautRopeCore/CollisionShape.h"
 
 struct FKConvexElem;
+struct FKBoxElem;
 class UPrimitiveComponent;
 
 // Builds the simulation's collision shape from UE collision primitives. This is
@@ -22,6 +23,15 @@ namespace TautRopeShapeBuilder
 	// the rope has edges to slide along where shapes meet.
 	TAUTROPE_API TautRope::CollisionShape Build(
 		const FKConvexElem& Convex
+		, const UPrimitiveComponent* PrimComp
+		, const TArray<UPrimitiveComponent*>& OtherPrimComps
+	);
+
+	// Box simple collision is the common case for static meshes and converts to a
+	// convex hull exactly, so it goes through the same path rather than being
+	// silently ignored.
+	TAUTROPE_API TautRope::CollisionShape Build(
+		const FKBoxElem& Box
 		, const UPrimitiveComponent* PrimComp
 		, const TArray<UPrimitiveComponent*>& OtherPrimComps
 	);

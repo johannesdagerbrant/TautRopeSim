@@ -340,3 +340,51 @@ namespace TautRopeShapeBuilder
 		return Shape;
 	}
 }
+
+namespace
+{
+	// A box is a convex hull with eight corners, so it is expanded into one and
+	// run through the same code rather than given a parallel implementation.
+	// Winding is outward: Cross(B - A, C - A) points away from the box, which is
+	// what the edge rotations derive their up vector from.
+	FKConvexElem MakeConvexFromBox(const FKBoxElem& Box)
+	{
+		const double HalfX = Box.X * 0.5;
+		const double HalfY = Box.Y * 0.5;
+		const double HalfZ = Box.Z * 0.5;
+
+		FKConvexElem Convex;
+		Convex.VertexData = {
+			FVector(-HalfX, -HalfY, -HalfZ),	// 0
+			FVector(+HalfX, -HalfY, -HalfZ),	// 1
+			FVector(+HalfX, +HalfY, -HalfZ),	// 2
+			FVector(-HalfX, +HalfY, -HalfZ),	// 3
+			FVector(-HalfX, -HalfY, +HalfZ),	// 4
+			FVector(+HalfX, -HalfY, +HalfZ),	// 5
+			FVector(+HalfX, +HalfY, +HalfZ),	// 6
+			FVector(-HalfX, +HalfY, +HalfZ),	// 7
+		};
+		Convex.IndexData = {
+			4, 5, 6,  4, 6, 7,	// +Z
+			0, 3, 2,  0, 2, 1,	// -Z
+			1, 2, 6,  1, 6, 5,	// +X
+			0, 4, 7,  0, 7, 3,	// -X
+			3, 7, 6,  3, 6, 2,	// +Y
+			0, 1, 5,  0, 5, 4,	// -Y
+		};
+		Convex.SetTransform(FTransform(Box.Rotation, Box.Center));
+		return Convex;
+	}
+}
+
+namespace TautRopeShapeBuilder
+{
+	CollisionShape Build(
+		const FKBoxElem& Box
+		, const UPrimitiveComponent* PrimComp
+		, const TArray<UPrimitiveComponent*>& OtherPrimComps
+	)
+	{
+		return Build(MakeConvexFromBox(Box), PrimComp, OtherPrimComps);
+	}
+}

@@ -51,6 +51,10 @@ void FTautRopeRecorder::Start(const TautRope::Rope& Rope)
 	// entering this frame diverges immediately.
 	TautRope::CapturePoints(Rope.GetPoints(), Recording.InitialPoints);
 
+	// Not derivable from the points: the counter has already advanced past ids
+	// belonging to points pruned before recording began.
+	Recording.NextPointId = Rope.GetNextPointId();
+
 	Recording.Frames.reserve(InitialFrameCapacity);
 
 	bIsRecording = true;
