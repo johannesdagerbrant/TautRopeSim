@@ -4,6 +4,7 @@
 #include "Misc/DateTime.h"
 #include "Misc/EngineVersion.h"
 #include "Misc/Paths.h"
+#include "TautRopeConvert.h"
 #include "TautRopeCore/Rope.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogTautRopeRecorder, Log, All);
@@ -31,11 +32,6 @@ namespace
 		const FString Stamp = FDateTime::Now().ToString(TEXT("%Y%m%d-%H%M%S"));
 		const FString Name = Label.IsEmpty() ? TEXT("TautRope") : Label;
 		return Directory / FString::Printf(TEXT("%s_%s.tautrope"), *Name, *Stamp);
-	}
-
-	TautRope::Vec3 ToCore(const FVector& V)
-	{
-		return TautRope::Vec3(V.X, V.Y, V.Z);
 	}
 }
 
@@ -93,8 +89,8 @@ TautRope::FrameCapture* FTautRopeRecorder::BeginFrame(
 	// place; the frame is complete either way once the tick returns.
 	Recording.Frames.emplace_back();
 	TautRope::RecordedFrame& Frame = Recording.Frames.back();
-	Frame.StartLocation = ToCore(StartLocation);
-	Frame.EndLocation = ToCore(EndLocation);
+	Frame.StartLocation = TautRopeConvert::ToCore(StartLocation);
+	Frame.EndLocation = TautRopeConvert::ToCore(EndLocation);
 	Frame.MaxLength = MaxLength;
 	Frame.DeltaTime = DeltaTime;
 	return &Frame.Capture;

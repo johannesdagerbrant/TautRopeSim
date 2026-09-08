@@ -4,28 +4,16 @@
 #include "PhysicsEngine/BodySetup.h"
 #include "PhysicsEngine/ConvexElem.h"
 #include "TautRopeConfig.h"
+#include "TautRopeConvert.h"
 
 using TautRope::CollisionShape;
 using TautRope::Int2;
 using TautRope::Vec3;
+using TautRopeConvert::ToCore;
+using TautRopeConvert::ToUE;
 
 namespace
 {
-	FVector ToUE(const Vec3& V)
-	{
-		return FVector(V.X, V.Y, V.Z);
-	}
-
-	Vec3 ToCore(const FVector& V)
-	{
-		return Vec3(V.X, V.Y, V.Z);
-	}
-
-	TautRope::Quat ToCore(const FQuat& Q)
-	{
-		return TautRope::Quat(Q.X, Q.Y, Q.Z, Q.W);
-	}
-
 	int32 FindOrAddVertex(const Vec3& NewVert, std::vector<Vec3>& InOutVerts)
 	{
 		for (int32 Index = 0; Index < static_cast<int32>(InOutVerts.size()); ++Index)

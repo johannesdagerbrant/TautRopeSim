@@ -84,3 +84,4 @@ Plugins/TautRope/Standalone/build/
 
 # Recordings and replay output are transient debug artifacts
 *.tautrope
+Plugins/TautRope/Standalone/build-*/

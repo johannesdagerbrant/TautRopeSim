@@ -4,6 +4,7 @@
 
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
+#include "TautRopeConvert.h"
 
 static TAutoConsoleVariable<int32> CVarDrawDebugRope(
 	TEXT("TautRope.DrawDebugRope"),
@@ -41,23 +42,8 @@ static TAutoConsoleVariable<int32> CVarDrawDebugRemoveSweep(
 	ECVF_Cheat
 );
 
-namespace
-{
-	FORCEINLINE FVector ToUE(const TautRope::Vec3& V)
-	{
-		return FVector(V.X, V.Y, V.Z);
-	}
-
-	FORCEINLINE FColor ToUE(unsigned int Color)
-	{
-		return FColor(
-			static_cast<uint8>((Color >> 16) & 0xFFu)	// R
-			, static_cast<uint8>((Color >> 8) & 0xFFu)	// G
-			, static_cast<uint8>(Color & 0xFFu)			// B
-			, static_cast<uint8>((Color >> 24) & 0xFFu)	// A
-		);
-	}
-}
+using TautRopeConvert::ToColor;
+using TautRopeConvert::ToUE;
 
 bool FTautRopeDebugDraw::IsUsable() const
 {
@@ -66,19 +52,19 @@ bool FTautRopeDebugDraw::IsUsable() const
 
 void FTautRopeDebugDraw::Line(const TautRope::Vec3& A, const TautRope::Vec3& B, unsigned int Color)
 {
-	DrawDebugLine(World, ToUE(A), ToUE(B), ToUE(Color), false, -1.f, 0);
+	DrawDebugLine(World, ToUE(A), ToUE(B), ToColor(Color), false, -1.f, 0);
 }
 
 void FTautRopeDebugDraw::Sphere(const TautRope::Vec3& Center, double Radius, TautRope::int32 Segments, unsigned int Color)
 {
-	DrawDebugSphere(World, ToUE(Center), Radius, Segments, ToUE(Color));
+	DrawDebugSphere(World, ToUE(Center), Radius, Segments, ToColor(Color));
 }
 
 void FTautRopeDebugDraw::Triangle(const TautRope::Vec3& A, const TautRope::Vec3& B, const TautRope::Vec3& C, unsigned int Color)
 {
 	const TArray<FVector> Vertices = { ToUE(A), ToUE(B), ToUE(C) };
 	const TArray<int32> Indices = { 0, 1, 2 };
-	DrawDebugMesh(World, Vertices, Indices, ToUE(Color), false, 5.f);
+	DrawDebugMesh(World, Vertices, Indices, ToColor(Color), false, 5.f);
 }
 
 bool FTautRopeDebugDraw::WantsSegmentSweep() const
