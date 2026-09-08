@@ -3,6 +3,7 @@
 //
 // The point is iteration speed: change core, rebuild core, replay, look at what
 // moved. Nothing here waits for DeltaTime.
+#include "TautRopeCore/Compare.h"
 #include "TautRopeCore/Recording.h"
 #include "TautRopeCore/Rope.h"
 
@@ -23,7 +24,11 @@ namespace
 			"\n"
 			"options:\n"
 			"  -o <path>   write the replayed result as a recording\n"
+			"  --verify    compare the replay against the captured output\n"
 			"  --info      summarise the input and exit without replaying\n"
+			"\n"
+			"exit codes:\n"
+			"  0 ok   1 error   2 usage   3 verify failed\n"
 		);
 	}
 
@@ -140,6 +145,7 @@ int main(int argc, char** argv)
 	const char* InputPath = nullptr;
 	const char* OutputPath = nullptr;
 	bool bInfoOnly = false;
+	bool bVerify = false;
 
 	for (int Index = 1; Index < argc; ++Index)
 	{
@@ -147,6 +153,10 @@ int main(int argc, char** argv)
 		if (std::strcmp(Arg, "--info") == 0)
 		{
 			bInfoOnly = true;
+		}
+		else if (std::strcmp(Arg, "--verify") == 0)
+		{
+			bVerify = true;
 		}
 		else if (std::strcmp(Arg, "-o") == 0)
 		{
@@ -215,6 +225,34 @@ int main(int argc, char** argv)
 			return 1;
 		}
 		std::printf("  written to %s\n", OutputPath);
+	}
+
+	if (bVerify)
+	{
+		TautRope::RecordingDivergence Divergence;
+		const bool bIdentical = TautRope::CompareRecordings(Input, Result, Divergence);
+
+		std::printf("\nverify: %s\n", bIdentical ? "PASS" : "FAIL");
+		std::printf("  frames diverged   %d of %d\n",
+			Divergence.DivergentFrameCount, Divergence.ComparedFrameCount);
+
+		if (!bIdentical)
+		{
+			std::printf("  first divergence\n");
+			std::printf("    phase           %s\n", Divergence.Phase);
+			std::printf("    field           %s\n", Divergence.Field);
+			if (Divergence.FrameIndex != TautRope::IndexNone)
+			{
+				std::printf("    frame           %d\n", Divergence.FrameIndex);
+			}
+			if (Divergence.PointIndex != TautRope::IndexNone)
+			{
+				std::printf("    point           %d\n", Divergence.PointIndex);
+			}
+			std::printf("    recorded        %s\n", Divergence.RecordedValue.c_str());
+			std::printf("    replayed        %s\n", Divergence.ReplayedValue.c_str());
+			return 3;
+		}
 	}
 
 	return 0;
