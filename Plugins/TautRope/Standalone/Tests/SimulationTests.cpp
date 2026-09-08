@@ -8,6 +8,7 @@
 #include "Support.h"
 
 #include "TautRopeCore/Compare.h"
+#include "TautRopeCore/Config.h"
 #include "TautRopeCore/Recording.h"
 #include "TautRopeCore/Rope.h"
 
@@ -50,6 +51,8 @@ namespace
 	{
 		double DeepestPenetration = 0.0;
 		int MaxPointCount = 0;
+		int CollisionIterationCapHits = 0;
+		int MostCollisionIterations = 0;
 		std::vector<TautRope::Point> FinalPoints;
 	};
 
@@ -73,6 +76,8 @@ namespace
 			if (Count > Result.MaxPointCount) { Result.MaxPointCount = Count; }
 		}
 		Result.FinalPoints = Rope.GetPoints();
+		Result.CollisionIterationCapHits = Rope.CollisionIterationCapHits;
+		Result.MostCollisionIterations = Rope.MostCollisionIterations;
 		return Result;
 	}
 }
@@ -133,6 +138,26 @@ TEST(Simulation_WrapsShapeWhenEndIsSweptAround)
 	if (Result.MaxPointCount <= 2)
 	{
 		std::printf("      rope stayed a straight line; the fixture is not being wrapped\n");
+	}
+}
+
+// The iteration cap is a backstop against point counts exploding until the
+// simulation freezes and runs out of memory, not a budget the solver is meant to
+// spend. Reaching it means the collision phase never settled, so this is a hard
+// invariant: any hypothesis that trips it is wrong, however good its other
+// numbers look.
+TEST(Simulation_NeverExhaustsCollisionIterations)
+{
+	const SweepResult Result = SweepAroundShape(360);
+	CHECK_EQ(Result.CollisionIterationCapHits, 0);
+	CHECK(Result.MostCollisionIterations < TautRope::MaxCollisionIterations);
+	std::printf("      worst frame settled in %d of %d collision iterations\n",
+		Result.MostCollisionIterations, TautRope::MaxCollisionIterations);
+	if (Result.CollisionIterationCapHits > 0)
+	{
+		std::printf("      %d frame(s) hit the cap: points were still being inserted\n"
+			"      when the loop gave up, which is runaway insertion\n",
+			Result.CollisionIterationCapHits);
 	}
 }
 

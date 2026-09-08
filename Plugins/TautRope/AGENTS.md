@@ -148,12 +148,6 @@ every edge within `SweepRatioTieTolerance` in `HitData::TiedHits`, and the
 collision phase inserts a point for each, ordered along the rope by distance
 from the preceding point.
 
-Watch the `collision iterations, worst frame N of 100` line the replay prints. A
-healthy frame settles in about 2. Reaching the cap means points were still being
-inserted when the loop gave up, which is how runaway insertion presents -- not a
-crash, just slower every frame until it looks hung. The replay warns when any
-frame hits it.
-
 `conditioning` reports the distribution of the conditioning number by decade,
 how many sweeps had `Det` *bitwise* zero, and how many of the coplanar ones were
 against an in-face edge. The distribution is what tells you whether an epsilon
@@ -202,6 +196,23 @@ between consecutive snapshots tells you what was inserted and removed. `shape`,
 ---
 
 ## Things that will bite you
+
+**Reaching the collision iteration cap means the code is wrong.** `MaxCollisionIterations`
+is not a budget the solver is meant to spend. It exists for one reason: to stop
+point counts exploding exponentially, which freezes the simulation and then runs
+it out of memory. A healthy frame settles in about **2** iterations, so anything
+approaching 100 is a runaway, not a heavy frame, and the fix is never to raise
+the ceiling.
+
+It is enforced, not merely observed. `Rope::CollisionIterationCapHits` counts
+frames that exhausted the loop and `Rope::MostCollisionIterations` records the
+worst, `tautrope-replay` prints `collision iterations, worst frame N of 100` on
+every run and warns when any frame hit the cap, and
+`Simulation_NeverExhaustsCollisionIterations` fails the suite outright if one
+does. This exists because a hypothesis in this area once inserted a point on all
+100 iterations of a single frame -- 3 points became 102 -- and the next frame
+appeared to hang, which cost far more time to diagnose than to detect. Whatever
+else a change improves, if it trips this it is wrong.
 
 **Build with `Standalone/b.bat`, not bare `cmake --build`.** The compiler needs
 the MSVC environment, and `vcvars64.bat` costs ~1.5 s of what is otherwise a
@@ -261,6 +272,10 @@ debug against.
 `Standalone/Tests/`. Two kinds:
 
 - `TEST(Name)` — must pass. A red suite means a regression.
+- Invariants that must never trip, such as
+  `Simulation_NeverExhaustsCollisionIterations`, belong here rather than in a
+  printed warning: a hypothesis that trips one has to fail the suite, not be
+  noticed later in output nobody read.
 - `TEST_PENDING(Name)` — documents behaviour known to be wrong. Runs and
   reports, but does not fail the suite.
 
