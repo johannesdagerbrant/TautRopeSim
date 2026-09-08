@@ -250,7 +250,15 @@ namespace TautRope
 			InFace.push_back(Flags);
 		}
 
+		// Seeded with the initial state, otherwise a recording that opens already
+		// wrapped counts every point it started with as created on frame 0, and the
+		// birth figures below describe the capture's starting position rather than
+		// anything the simulation did.
 		std::set<int32> Seen;
+		for (const RecordedPoint& P : InRecording.InitialPoints)
+		{
+			Seen.insert(P.Id);
+		}
 		for (int32 FrameIndex = 0; FrameIndex < Num(InRecording.Frames); ++FrameIndex)
 		{
 			std::vector<int32> BornThisFrame;
