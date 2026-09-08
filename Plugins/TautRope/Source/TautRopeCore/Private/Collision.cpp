@@ -302,6 +302,49 @@ namespace TautRope
 		}
 	}
 
+	namespace
+	{
+		// Where along the rope's swept path a contact at InLocation happens, by
+		// projecting SupportCorner through it onto the From->To line. Factored out
+		// of GetTriangleLineIntersection unchanged so both the general and the
+		// coplanar path produce sweep ratios on the same scale.
+		void ComputeSweepPosition(
+			const Vec3& FromCorner
+			, const Vec3& ToCorner
+			, const Vec3& SupportCorner
+			, const Vec3& InLocation
+			, Vec3& OutOnSweepEdgeLocation
+			, float& OutSweepRatio
+		)
+		{
+			const Vec3 RayOrigin = SupportCorner;
+			const Vec3 RayDir = (InLocation - SupportCorner).GetSafeNormal();
+
+			const Vec3 LinePoint = FromCorner;
+			const Vec3 LineDir = ToCorner - FromCorner;
+
+			const Vec3 CrossDir = Vec3::Cross(LineDir, RayDir);
+			const float Denom = static_cast<float>(CrossDir.SizeSquared());
+
+			if (Denom > KindaSmallNumber)
+			{
+				const float t = static_cast<float>(Vec3::Dot(Vec3::Cross(RayOrigin - LinePoint, RayDir), CrossDir)) / Denom;
+
+				OutSweepRatio = t / static_cast<float>(LineDir.Size()); // normalized ratio along rope edge
+				OutSweepRatio = Math::Clamp(OutSweepRatio, 0.f, 1.f);
+
+				OutOnSweepEdgeLocation = LinePoint + LineDir * t;
+			}
+			else
+			{
+				// Ray and edge are parallel, fall back to nearest edge point
+				OutSweepRatio = 0.f;
+				OutOnSweepEdgeLocation = FromCorner;
+			}
+		}
+
+	}
+
 	bool GetTriangleLineIntersection(
 		const Vec3& FromCorner
 		, const Vec3& ToCorner
@@ -320,9 +363,37 @@ namespace TautRope
 
 		const Vec3 PVec = Vec3::Cross(Dir, Edge2);
 		const float Det = static_cast<float>(Vec3::Dot(Edge1, PVec));
-		if (Math::Abs(Det) < KindaSmallNumber)
+
+		// Det is a scalar triple product, so it scales with the product of the
+		// three lengths. Comparing it against an absolute epsilon made the test
+		// meaningless at world scale: with edges of a few hundred units a
+		// well-conditioned Det is ~5e6, so a fixed 1e-4 threshold amounts to a
+		// relative tolerance of 1e-11, finer than the cancellation in the dot
+		// product can resolve. Normalise it instead.
+		const double DetScale = Edge1.Size() * Dir.Size() * Edge2.Size();
+		const bool bIsCoplanar = DetScale <= 0.0
+			|| Math::Abs(static_cast<double>(Det)) < static_cast<double>(KindaSmallNumber) * DetScale;
+
+		if (bIsCoplanar)
 		{
-			return false; // Line parallel to triangle
+			// The sweep triangle and the edge lie in the same plane, where
+			// Moller-Trumbore has no answer to give: the intersection is a segment,
+			// not a point, and the method divides by Det.
+			//
+			// This is why the rope can slide flat across an edge without ever
+			// registering it, and why that edge then shows up as a fresh collision
+			// later, once the geometry tilts out of plane -- by which time the rope
+			// line is already cutting through the solid.
+			//
+			// Reporting the in-plane overlap here does NOT fix that. Tried: clip the
+			// edge against the triangle in-plane and return the end the rope reaches
+			// first. The insertion does not remove the condition, because a point
+			// placed on the edge is still coplanar, so the next collision iteration
+			// finds the same overlap again. CollisionPhase inserted a point on all
+			// 100 of its iterations in a single frame (3 points -> 102), and the
+			// following frame hung. A flat surface has nothing to wrap, so the fix
+			// belongs upstream: do not offer coplanar edges to the rope at all.
+			return false;
 		}
 
 		const float InvDet = 1.0f / Det;
@@ -350,30 +421,7 @@ namespace TautRope
 		OutLocation = LineA + Dir * T;
 
 		// --- Step 2: Compute continuation along SupportCorner to OutLocation ---
-		const Vec3 RayOrigin = SupportCorner;
-		const Vec3 RayDir = (OutLocation - SupportCorner).GetSafeNormal();
-
-		const Vec3 LinePoint = FromCorner;
-		const Vec3 LineDir = ToCorner - FromCorner;
-
-		const Vec3 CrossDir = Vec3::Cross(LineDir, RayDir);
-		const float Denom = static_cast<float>(CrossDir.SizeSquared());
-
-		if (Denom > KindaSmallNumber)
-		{
-			const float t = static_cast<float>(Vec3::Dot(Vec3::Cross(RayOrigin - LinePoint, RayDir), CrossDir)) / Denom;
-
-			OutSweepRatio = t / static_cast<float>(LineDir.Size()); // normalized ratio along rope edge
-			OutSweepRatio = Math::Clamp(OutSweepRatio, 0.f, 1.f);
-
-			OutOnSweepEdgeLocation = LinePoint + LineDir * t;
-		}
-		else
-		{
-			// Ray and edge are parallel, fall back to nearest edge point
-			OutSweepRatio = 0.f;
-			OutOnSweepEdgeLocation = FromCorner;
-		}
+		ComputeSweepPosition(FromCorner, ToCorner, SupportCorner, OutLocation, OutOnSweepEdgeLocation, OutSweepRatio);
 
 		return true;
 	}
