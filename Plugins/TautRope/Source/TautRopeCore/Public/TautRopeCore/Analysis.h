@@ -89,6 +89,17 @@ namespace TautRope
 		int32 FirstPointIdOnInFaceEdge = IndexNone;
 		int32 FirstInFaceEdgeIndex = IndexNone;
 		int32 FirstInFaceShapeIndex = IndexNone;
+
+		// Where points come from. A point BORN attached to an in-face edge was put
+		// there by the collision phase, which means the sweep that created it was
+		// not coplanar with that edge -- the rope was still approaching the face
+		// from off-plane. A point that instead SLID onto an in-face edge got there
+		// later. The two need different fixes, so they are counted separately.
+		int32 PointsBorn = 0;
+		int32 PointsBornOnInFaceEdge = 0;
+		int32 PointsBornOnSameFrameAsAnother = 0;
+		int32 FirstBornOnInFaceFrame = IndexNone;
+		int32 FirstBornOnInFacePointId = IndexNone;
 	};
 
 	TAUTROPE_CORE_API EdgeUsageReport AnalyseEdgeUsage(const Recording& InRecording);

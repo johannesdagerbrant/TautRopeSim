@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 
 namespace TautRope
 {
@@ -247,8 +248,33 @@ namespace TautRope
 			InFace.push_back(Flags);
 		}
 
+		std::set<int32> Seen;
 		for (int32 FrameIndex = 0; FrameIndex < Num(InRecording.Frames); ++FrameIndex)
 		{
+			std::vector<int32> BornThisFrame;
+			for (const RecordedPoint& P : InRecording.Frames[FrameIndex].Capture.AfterPruning)
+			{
+				if (Seen.insert(P.Id).second)
+				{
+					++Report.PointsBorn;
+					BornThisFrame.push_back(P.Id);
+					if (P.ShapeIndex >= 0 && P.EdgeIndex >= 0 && P.ShapeIndex < Num(InFace)
+						&& InFace[P.ShapeIndex][static_cast<std::size_t>(P.EdgeIndex)])
+					{
+						++Report.PointsBornOnInFaceEdge;
+						if (Report.FirstBornOnInFaceFrame == IndexNone)
+						{
+							Report.FirstBornOnInFaceFrame = FrameIndex;
+							Report.FirstBornOnInFacePointId = P.Id;
+						}
+					}
+				}
+			}
+			if (BornThisFrame.size() > 1)
+			{
+				Report.PointsBornOnSameFrameAsAnother += Num(BornThisFrame);
+			}
+
 			for (const RecordedPoint& P : InRecording.Frames[FrameIndex].Capture.AfterPruning)
 			{
 				if (P.ShapeIndex < 0 || P.EdgeIndex < 0 || P.ShapeIndex >= Num(InFace))

@@ -140,6 +140,26 @@ namespace
 		std::printf("edges\n");
 		std::printf("  %d edges across %zu shapes, of which %d lie flat across a face\n",
 			E.TotalEdges, R.Shapes.size(), E.InFaceEdges);
+		for (std::size_t i = 0; i < R.Shapes.size(); ++i)
+		{
+			const TautRope::ShapePlanes Pl = TautRope::FindShapePlanes(R.Shapes[i]);
+			std::printf("  shape %zu in-face edges:", i);
+			for (const TautRope::int32 EdgeIndex : Pl.InFaceEdges)
+			{
+				std::printf(" %d", EdgeIndex);
+			}
+			std::printf("\n");
+		}
+		std::printf("  points created during the recording: %d\n", E.PointsBorn);
+		std::printf("  born already on an in-face edge:     %d (%.1f%%)\n",
+			E.PointsBornOnInFaceEdge,
+			100.0 * E.PointsBornOnInFaceEdge / (E.PointsBorn > 0 ? E.PointsBorn : 1));
+		std::printf("  born on the same frame as another:   %d\n", E.PointsBornOnSameFrameAsAnother);
+		if (E.FirstBornOnInFaceFrame != TautRope::IndexNone)
+		{
+			std::printf("  first such birth at frame %d: point id %d\n",
+				E.FirstBornOnInFaceFrame, E.FirstBornOnInFacePointId);
+		}
 		std::printf("  rope points attached to an edge: %d point-frames\n", E.AttachedPointFrames);
 		std::printf("  of those, on an in-face edge:    %d (%.1f%%)\n",
 			E.PointFramesOnInFaceEdges,
