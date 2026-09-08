@@ -28,7 +28,7 @@ namespace
 			"  --verify    compare the replay against the captured output\n"
 			"  --info      summarise the input and exit without replaying\n"
 			"  --analyse <what>   measure the recording without replaying;\n"
-			"              what = penetration | edges | vertex | conditioning | all\n"
+			"              what = penetration | edges | vertex | ties | conditioning | all\n"
 			"\n"
 			"exit codes:\n"
 			"  0 ok   1 error   2 usage   3 verify failed\n"
@@ -201,6 +201,33 @@ namespace
 		}
 	}
 
+
+	void PrintTies(const TautRope::Recording& R)
+	{
+		const TautRope::TiedSweepReport T = TautRope::AnalyseTiedSweeps(R);
+		std::printf("tied sweeps\n");
+		std::printf("  sweep triangles examined    %lld\n", T.Sweeps);
+		std::printf("  produced at least one hit   %lld\n", T.SweepsWithHit);
+		std::printf("  sweeps hitting 2+ edges     %lld\n", T.SweepsWithMultipleHits);
+		std::printf("    in-face edge won the sweep  %lld\n", T.InFaceEdgeWon);
+		std::printf("    in-face edge also reported  %lld\n", T.InFaceEdgeAlsoReported);
+		std::printf("    ratio gap to runner-up: zero %lld, <0.001 %lld, larger %lld\n",
+			T.GapExactlyZero, T.GapUnderMilli, T.GapOverMilli);
+		std::printf("  two edges, same sweep ratio %lld\n", T.SweepsWithTie);
+		std::printf("    involving an in-face edge %lld\n", T.TiesInvolvingInFaceEdge);
+		std::printf("    the two edges share a vertex %lld\n", T.TiesAtSharedVertex);
+		std::printf("    and meet at the same point   %lld\n", T.TiesAtSameLocation);
+		std::printf("    across two different shapes  %lld\n", T.TiesAcrossShapes);
+		if (T.FirstTieFrame != TautRope::IndexNone)
+		{
+			std::printf("  first at frame %d: shape %d edges %d and %d, shared vertex %d\n",
+				T.FirstTieFrame, T.FirstTieShape, T.FirstTieEdgeA, T.FirstTieEdgeB, T.FirstTieSharedVert);
+			std::printf("  SweepSegmentTriangleAgainstShape keeps one hit and compares with a\n"
+				"  strict <, so on a tie the lower edge index wins and the other edge is\n"
+				"  never reported to the collision phase at all\n");
+		}
+
+	}
 	void PrintConditioning(const TautRope::Recording& R)
 	{
 		const TautRope::ConditioningReport C = TautRope::AnalyseConditioning(R);
@@ -349,6 +376,7 @@ int main(int argc, char** argv)
 		if (bAll || std::strcmp(Analyse, "penetration") == 0)  { std::printf("\n"); PrintPenetration(Input); bKnown = true; }
 		if (bAll || std::strcmp(Analyse, "edges") == 0)        { std::printf("\n"); PrintEdges(Input); bKnown = true; }
 		if (bAll || std::strcmp(Analyse, "vertex") == 0)       { std::printf("\n"); PrintVertexApproaches(Input); bKnown = true; }
+		if (bAll || std::strcmp(Analyse, "ties") == 0)         { std::printf("\n"); PrintTies(Input); bKnown = true; }
 		if (bAll || std::strcmp(Analyse, "conditioning") == 0) { std::printf("\n"); PrintConditioning(Input); bKnown = true; }
 		if (!bKnown)
 		{

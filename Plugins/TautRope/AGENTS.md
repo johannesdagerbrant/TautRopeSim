@@ -101,6 +101,20 @@ loop that is about two seconds end to end. If you need a measurement that is not
 here, add it to `TautRopeCore/Analysis.h` so the next run is fast and the unit
 tests can assert on it.
 
+**Never re-implement production logic in an analysis.** A measurement must drive
+the real functions in `Collision.h` / `Rope.h`. If a measurement cannot be
+expressed by calling production code, that is a signal the production code needs
+to expose something -- change it, do not mirror it.
+
+This is not a style preference. A hand-rolled copy of the sweep loop in
+`Analysis.cpp` silently omitted two things the real `SweepSegmentTriangleAgainstShape`
+does -- it skips the edge each rope point is already attached to, and the B
+triangle is only swept when the A triangle misses. The copy reported 24 lost
+in-face edges with a ratio gap wider than 0.001; production reports 15, all
+within 0.001, which is the opposite conclusion. A mirrored implementation
+diverges from the thing you are trying to measure, and it fails silently: the
+numbers still look plausible.
+
 | what | answers |
 |---|---|
 | `penetration` | does the rope pass through a shape, from which frame, how deep, and has it recovered by the end |

@@ -6,6 +6,8 @@
 #include <cmath>
 #include <set>
 
+#include "TautRopeCore/Rope.h"
+
 namespace TautRope
 {
 	namespace
@@ -490,6 +492,164 @@ namespace TautRope
 				}
 			}
 		}
+		return Report;
+	}
+
+	TiedSweepReport AnalyseTiedSweeps(const Recording& InRecording, double)
+	{
+		TiedSweepReport Report;
+
+		std::vector<std::vector<bool>> IsInFaceEdge;
+		IsInFaceEdge.reserve(InRecording.Shapes.size());
+		for (const CollisionShape& Shape : InRecording.Shapes)
+		{
+			std::vector<bool> Flags(static_cast<std::size_t>(Num(Shape.Edges)), false);
+			for (const int32 EdgeIndex : FindShapePlanes(Shape).InFaceEdges)
+			{
+				Flags[static_cast<std::size_t>(EdgeIndex)] = true;
+			}
+			IsInFaceEdge.push_back(std::move(Flags));
+		}
+
+		const auto IsInFace = [&IsInFaceEdge](const int32 ShapeIndex, const int32 EdgeIndex)
+		{
+			return ShapeIndex >= 0 && EdgeIndex >= 0 && ShapeIndex < Num(IsInFaceEdge)
+				&& IsInFaceEdge[static_cast<std::size_t>(ShapeIndex)][static_cast<std::size_t>(EdgeIndex)];
+		};
+
+		for (int32 FrameIndex = 0; FrameIndex < Num(InRecording.Frames); ++FrameIndex)
+		{
+			const RecordedFrame& Frame = InRecording.Frames[FrameIndex];
+			const std::vector<RecordedPoint>& Before = Frame.Capture.AfterMovement;
+			const std::vector<RecordedPoint>& After = Frame.Capture.AfterCollision;
+
+			for (int32 i = 0; i + 1 < Num(Before); ++i)
+			{
+				// The target each endpoint was heading for is where it ended up after
+				// the collision phase resolved it.
+				const RecordedPoint* TargetA = nullptr;
+				const RecordedPoint* TargetB = nullptr;
+				for (const RecordedPoint& P : After)
+				{
+					if (P.Id == Before[i].Id) { TargetA = &P; }
+					if (P.Id == Before[i + 1].Id) { TargetB = &P; }
+				}
+				if (TargetA == nullptr || TargetB == nullptr)
+				{
+					continue;
+				}
+
+				// Drive the real sweep. Anything this reports, the collision phase
+				// sees; anything it drops, the collision phase never knew about.
+				Point PointA;
+				PointA.Location = Before[i].Location;
+				PointA.ShapeIndex = Before[i].ShapeIndex;
+				PointA.EdgeIndex = Before[i].EdgeIndex;
+				PointA.VertIndex = Before[i].VertIndex;
+				PointA.Id = Before[i].Id;
+
+				Point PointB;
+				PointB.Location = Before[i + 1].Location;
+				PointB.ShapeIndex = Before[i + 1].ShapeIndex;
+				PointB.EdgeIndex = Before[i + 1].EdgeIndex;
+				PointB.VertIndex = Before[i + 1].VertIndex;
+				PointB.Id = Before[i + 1].Id;
+
+				HitData Hit;
+				SweepSegmentThroughShapes(
+					Hit
+					, PointA
+					, PointB
+					, Before[i].Location
+					, Before[i + 1].Location
+					, TargetA->Location
+					, TargetB->Location
+					, InRecording.Shapes
+					, i + 1
+					, nullptr
+				);
+
+				++Report.Sweeps;
+				if (!Hit.bIsHit)
+				{
+					continue;
+				}
+				++Report.SweepsWithHit;
+
+				if (Hit.TiedHits.empty())
+				{
+					if (IsInFace(Hit.ShapeIndex, Hit.EdgeIndex))
+					{
+						++Report.InFaceEdgeWon;
+					}
+					continue;
+				}
+
+				++Report.SweepsWithMultipleHits;
+				++Report.SweepsWithTie;
+
+				if (IsInFace(Hit.ShapeIndex, Hit.EdgeIndex))
+				{
+					++Report.InFaceEdgeWon;
+				}
+
+				double SmallestGap = -1.0;
+				for (const TiedHit& Tied : Hit.TiedHits)
+				{
+					if (IsInFace(Tied.ShapeIndex, Tied.EdgeIndex))
+					{
+						++Report.InFaceEdgeAlsoReported;
+						++Report.TiesInvolvingInFaceEdge;
+					}
+					else if (IsInFace(Hit.ShapeIndex, Hit.EdgeIndex))
+					{
+						++Report.TiesInvolvingInFaceEdge;
+					}
+
+					const double Gap = Math::Abs(static_cast<double>(Tied.SweepRatio - Hit.SweepRatio));
+					if (SmallestGap < 0.0 || Gap < SmallestGap)
+					{
+						SmallestGap = Gap;
+					}
+
+					if ((Tied.Location - Hit.Location).Size() <= 0.01)
+					{
+						++Report.TiesAtSameLocation;
+					}
+
+					if (Tied.ShapeIndex != Hit.ShapeIndex)
+					{
+						++Report.TiesAcrossShapes;
+						continue;
+					}
+
+					const Int2& EdgeA = InRecording.Shapes[Hit.ShapeIndex].Edges[Hit.EdgeIndex];
+					const Int2& EdgeB = InRecording.Shapes[Tied.ShapeIndex].Edges[Tied.EdgeIndex];
+					int32 Shared = IndexNone;
+					if (EdgeA.X == EdgeB.X || EdgeA.X == EdgeB.Y) { Shared = EdgeA.X; }
+					else if (EdgeA.Y == EdgeB.X || EdgeA.Y == EdgeB.Y) { Shared = EdgeA.Y; }
+
+					if (Shared != IndexNone)
+					{
+						++Report.TiesAtSharedVertex;
+					}
+
+					if (Report.FirstTieFrame == IndexNone)
+					{
+						Report.FirstTieFrame = FrameIndex;
+						Report.FirstTieShape = Hit.ShapeIndex;
+						Report.FirstTieEdgeA = Hit.EdgeIndex;
+						Report.FirstTieEdgeB = Tied.EdgeIndex;
+						Report.FirstTieSharedVert = Shared;
+					}
+				}
+
+				if (SmallestGap == 0.0)       { ++Report.GapExactlyZero; }
+				else if (SmallestGap < 0.001) { ++Report.GapUnderMilli; }
+				else                          { ++Report.GapOverMilli; }
+			}
+		}
+
 		return Report;
 	}
 }

@@ -11,6 +11,18 @@ namespace TautRope
 	class IDebugDraw;
 	struct Point;
 
+	// An edge the same sweep reached at effectively the same moment as the
+	// winning hit. Geometrically these are the other edges meeting at the vertex
+	// the sweep crossed.
+	struct TiedHit
+	{
+		Vec3 Location;
+		Vec3 OnSweepEdgeLocation;
+		int32 ShapeIndex = IndexNone;
+		int32 EdgeIndex = IndexNone;
+		float SweepRatio = MaxFloat;
+	};
+
 	struct HitData
 	{
 		bool bIsHit = false;
@@ -21,6 +33,11 @@ namespace TautRope
 		int32 ShapeIndex = IndexNone;
 		int32 EdgeIndex = IndexNone;
 		float SweepRatio = MaxFloat;
+
+		// Everything else the sweep reached at the same time as the winner above.
+		// Populated by SweepSegmentTriangleAgainstShape; without it the sweep can
+		// only ever report one edge and the rest are silently dropped.
+		std::vector<TiedHit> TiedHits;
 	};
 
 	TAUTROPE_CORE_API void SweepRemovePoint(

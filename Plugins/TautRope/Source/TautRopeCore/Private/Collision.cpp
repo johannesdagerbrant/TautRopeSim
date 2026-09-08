@@ -105,6 +105,7 @@ namespace TautRope
 		const bool bIsDebugDrawingActive = Debug != nullptr && Debug->WantsSegmentSweep();
 
 		OutHitData.SweepRatio = MaxFloat;
+		OutHitData.TiedHits.clear();
 		// First perform triangle sweep for A-movement
 		for (int32 ShapeIndex = 0; ShapeIndex < Num(Shapes); ++ShapeIndex)
 		{
@@ -146,6 +147,7 @@ namespace TautRope
 		InOutSegmentPointA.Location = TargetLocationA;
 
 		OutHitData.SweepRatio = MaxFloat;
+		OutHitData.TiedHits.clear();
 		// Perform triangle sweep for B-movement
 		for (int32 ShapeIndex = 0; ShapeIndex < Num(Shapes); ++ShapeIndex)
 		{
@@ -243,8 +245,41 @@ namespace TautRope
 				, SweepRatio
 			);
 
-			if (bIsIntersection && SweepRatio < OutHitData.SweepRatio)
+			if (!bIsIntersection)
 			{
+				continue;
+			}
+
+			// A strict < here used to decide the whole thing, which meant an edge
+			// reached at the same moment as the incumbent was discarded without ever
+			// being reported. That happens whenever the sweep crosses a vertex: both
+			// edges meeting there are crossed at the same sweep ratio, and the lower
+			// edge index won purely by iteration order. On the wrap recordings that
+			// coin flip decided whether the rope attached to a real silhouette edge
+			// or to the triangulation diagonal lying flat in a face.
+			if (SweepRatio < OutHitData.SweepRatio)
+			{
+				// The winner is chosen exactly as it always was, so which edge the
+				// rope attaches to does not change. What changes is that the edge
+				// being displaced is kept when it was tied, instead of vanishing.
+				if (OutHitData.bIsHit
+					&& Math::Abs(SweepRatio - OutHitData.SweepRatio) <= SweepRatioTieTolerance)
+				{
+					TiedHit Displaced;
+					Displaced.Location = OutHitData.Location;
+					Displaced.OnSweepEdgeLocation = OutHitData.OnSweepEdgeLocation;
+					Displaced.ShapeIndex = OutHitData.ShapeIndex;
+					Displaced.EdgeIndex = OutHitData.EdgeIndex;
+					Displaced.SweepRatio = OutHitData.SweepRatio;
+					OutHitData.TiedHits.push_back(Displaced);
+				}
+				else
+				{
+					// A clearly nearer hit, so nothing that tied with the old winner
+					// ties with this one.
+					OutHitData.TiedHits.clear();
+				}
+
 				OutHitData.bIsHit = true;
 				OutHitData.Location = ClosestPointOnLine;
 				OutHitData.OnSweepEdgeLocation = OnSweepEdgeLocation;
@@ -253,6 +288,17 @@ namespace TautRope
 				OutHitData.RopePointIndex = RopePointIndex;
 				OutHitData.EdgeIndex = EdgeIndex;
 				OutHitData.ShapeIndex = ShapeIndex;
+			}
+			else if (OutHitData.bIsHit
+				&& Math::Abs(SweepRatio - OutHitData.SweepRatio) <= SweepRatioTieTolerance)
+			{
+				TiedHit Tied;
+				Tied.Location = ClosestPointOnLine;
+				Tied.OnSweepEdgeLocation = OnSweepEdgeLocation;
+				Tied.ShapeIndex = ShapeIndex;
+				Tied.EdgeIndex = EdgeIndex;
+				Tied.SweepRatio = SweepRatio;
+				OutHitData.TiedHits.push_back(Tied);
 			}
 		}
 	}

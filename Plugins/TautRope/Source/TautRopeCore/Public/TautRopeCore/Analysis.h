@@ -154,4 +154,43 @@ namespace TautRope
 	// degenerate. A high near-coplanar count with zero accepted means the rope is
 	// sliding flat across edges that are never registering.
 	TAUTROPE_CORE_API ConditioningReport AnalyseConditioning(const Recording& InRecording, double CoplanarThreshold = 1.0e-6);
+
+	// Sweeps where more than one edge intersects the same sweep triangle at the
+	// same barycentric point. Geometrically that point is a shape vertex: two
+	// edges meeting there both cross the triangle at the corner they share. The
+	// collision phase keeps a single best hit per sweep, so one of the two is
+	// discarded, and which one survives decides whether the rope attaches to the
+	// real silhouette edge or to the triangulation diagonal lying flat in a face.
+	//
+	// This is the benchmark for the tie fix: TiesAtSharedVertex is what needs
+	// handling, and PointsBornOnInFaceEdge in EdgeUsageReport is what should stop
+	// varying run to run once it is handled.
+	struct TAUTROPE_CORE_API TiedSweepReport
+	{
+		long long Sweeps = 0;
+		long long SweepsWithHit = 0;
+		long long SweepsWithTie = 0;
+		long long TiesInvolvingInFaceEdge = 0;
+		long long TiesAtSharedVertex = 0;
+		long long TiesAcrossShapes = 0;
+
+		// Ties are only part of it. HitData holds ONE hit, so whenever a sweep
+		// crosses more than one edge every loser is discarded, tie or not.
+		long long SweepsWithMultipleHits = 0;
+		long long InFaceEdgeWon = 0;
+		long long InFaceEdgeLost = 0;
+		long long InFaceEdgeAlsoReported = 0;
+		long long GapExactlyZero = 0;
+		long long GapUnderMilli = 0;
+		long long GapOverMilli = 0;
+		long long TiesAtSameLocation = 0;
+
+		int32 FirstTieFrame = IndexNone;
+		int32 FirstTieShape = IndexNone;
+		int32 FirstTieEdgeA = IndexNone;
+		int32 FirstTieEdgeB = IndexNone;
+		int32 FirstTieSharedVert = IndexNone;
+	};
+
+	TAUTROPE_CORE_API TiedSweepReport AnalyseTiedSweeps(const Recording& InRecording, double RatioTolerance = 0.0);
 }
