@@ -29,7 +29,7 @@ namespace
 			"  --verify    compare the replay against the captured output\n"
 			"  --info      summarise the input and exit without replaying\n"
 			"  --analyse <what>   measure the recording without replaying;\n"
-			"              what = penetration | edges | vertex | ties | conditioning | all\n"
+			"              what = penetration | edges | vertex | slides | ties | conditioning | all\n"
 			"\n"
 			"exit codes:\n"
 			"  0 ok   1 error   2 usage   3 verify failed\n"
@@ -175,6 +175,39 @@ namespace
 		}
 	}
 
+
+	void PrintSlides(const TautRope::Recording& R)
+	{
+		const TautRope::SlideReport S = TautRope::AnalyseSlides(R);
+		std::printf("slide-off events\n");
+		std::printf("  frames that removed points   %d\n", S.FramesWithRemoval);
+		std::printf("  points removed in total      %d\n", S.TotalPointsRemoved);
+		std::printf("  removed group shared a vertex %d\n", S.EventsAtSharedVertex);
+		std::printf("  events that began penetration %d\n", S.EventsThatBeganPenetration);
+		if (S.Events.empty())
+		{
+			std::printf("  the rope never lost a point, so it never slid over anything\n");
+			return;
+		}
+		std::printf("\n  frame  pts  -n  shape/vert  spread   inside b/a        worst inside within 30f\n");
+		for (const TautRope::SlideEvent& E : S.Events)
+		{
+			std::printf("  %-6d %-4d %-3d ", E.Frame, E.PointsBefore, E.PointsRemoved);
+			if (E.SharedVertIndex != TautRope::IndexNone)
+			{
+				std::printf("%d/v%-8d ", E.SharedShapeIndex, E.SharedVertIndex);
+			}
+			else
+			{
+				std::printf("%-11s ", "-");
+			}
+			std::printf("%7.3f  %7.3f / %-7.3f  %8.3f @ frame %-6d", E.SpreadBefore, E.InsideBefore, E.InsideAfter, E.InsideWithinWindow, E.InsideWindowFrame);
+			if (E.bAllRemovedOnInFaceEdge)      { std::printf("  all in-face"); }
+			else if (E.bAnyRemovedOnInFaceEdge) { std::printf("  some in-face"); }
+			std::printf("\n");
+		}
+	}
+
 	void PrintVertexApproaches(const TautRope::Recording& R)
 	{
 		const std::vector<TautRope::VertexApproach> V = TautRope::AnalyseVertexApproaches(R);
@@ -190,10 +223,15 @@ namespace
 				A.PointIdA, A.PointIdB, A.ShapeIndex, A.VertIndex, A.FirstFrame, A.LastFrame);
 			std::printf("    distance %.3f -> %.3f, closing at %.8f units/frame\n",
 				A.StartDistance, A.EndDistance, A.FinalSpeed);
-			if (A.FinalSpeed > 0.0)
+			if (A.bEndedByRemoval)
 			{
-				std::printf("    at that rate, %.0f more frames to reach the vertex (%.1f minutes at 60fps)\n",
-					A.FramesToArrive, A.FramesToArrive / 3600.0);
+				std::printf("    ARRIVED: pruned at frame %d after closing to %.3f\n",
+					A.LastFrame + 1, A.EndDistance);
+			}
+			else if (A.FinalSpeed > 0.0)
+			{
+				std::printf("    still closing at the end of the recording; do not read the rate\n"
+					"    as a countdown, arrival is a prune, see --analyse slides\n");
 			}
 			else
 			{
@@ -381,6 +419,7 @@ int main(int argc, char** argv)
 		if (bAll || std::strcmp(Analyse, "penetration") == 0)  { std::printf("\n"); PrintPenetration(Input); bKnown = true; }
 		if (bAll || std::strcmp(Analyse, "edges") == 0)        { std::printf("\n"); PrintEdges(Input); bKnown = true; }
 		if (bAll || std::strcmp(Analyse, "vertex") == 0)       { std::printf("\n"); PrintVertexApproaches(Input); bKnown = true; }
+		if (bAll || std::strcmp(Analyse, "slides") == 0)       { std::printf("\n"); PrintSlides(Input); bKnown = true; }
 		if (bAll || std::strcmp(Analyse, "ties") == 0)         { std::printf("\n"); PrintTies(Input); bKnown = true; }
 		if (bAll || std::strcmp(Analyse, "conditioning") == 0) { std::printf("\n"); PrintConditioning(Input); bKnown = true; }
 		if (!bKnown)

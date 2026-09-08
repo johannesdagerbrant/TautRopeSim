@@ -105,7 +105,14 @@ namespace TautRope
 	TAUTROPE_CORE_API EdgeUsageReport AnalyseEdgeUsage(const Recording& InRecording);
 
 	// Two adjacent points on edges that meet at a vertex, tracked as they close on
-	// it. This is how the convergence slowdown is measured.
+	// it. This measures the convergence slowdown ONLY.
+	//
+	// It does not tell you whether the rope reaches the vertex, and FramesToArrive
+	// must not be read as if it did. Arrival is not the end of a ramp, it is a
+	// discrete event: the points converge and the pruning phase removes them in a
+	// single frame. Extrapolating a closing rate reported thousands of frames to
+	// arrival on a capture where eleven such arrivals had already happened. Use
+	// AnalyseSlides for arrivals.
 	struct TAUTROPE_CORE_API VertexApproach
 	{
 		int32 FirstFrame = IndexNone;
@@ -119,10 +126,64 @@ namespace TautRope
 		double EndDistance = 0.0;
 		double FinalSpeed = 0.0;      // units per frame, averaged over the tail
 		double FramesToArrive = 0.0;  // at FinalSpeed; infinite in effect if it stalls
+
+		// The pair stopped existing, i.e. it converged and was pruned. When this is
+		// set the rate figures above describe how it got there, not what is left to
+		// go, and FramesToArrive is meaningless.
+		bool bEndedByRemoval = false;
 	};
 
 	// The pair that gets closest to a shared vertex and stays there longest.
 	TAUTROPE_CORE_API std::vector<VertexApproach> AnalyseVertexApproaches(const Recording& InRecording, int32 MaxResults = 5);
+
+	// A frame where the pruning phase removed points. This is the event a rope
+	// sliding over a vertex actually produces, and it is discrete: points converge,
+	// then vanish in one frame, and the rope carries on over the corner.
+	//
+	// Tracking convergence as a closing *rate* cannot see this. A rate averaged
+	// over a whole recording reports thousands of frames to arrival while the
+	// arrival has already happened and been pruned, several times over. Look at the
+	// frames where the point count drops instead.
+	struct TAUTROPE_CORE_API SlideEvent
+	{
+		int32 Frame = IndexNone;
+		int32 PointsBefore = 0;
+		int32 PointsRemoved = 0;
+
+		// Set when every removed point sat on an edge meeting at one vertex, which
+		// is the signature of a converged group sliding over that corner.
+		int32 SharedShapeIndex = IndexNone;
+		int32 SharedVertIndex = IndexNone;
+		bool bAllRemovedOnInFaceEdge = false;
+		bool bAnyRemovedOnInFaceEdge = false;
+
+		// How tightly the group had converged: the widest gap between consecutive
+		// removed points on the frame before they went.
+		double SpreadBefore = 0.0;
+
+		// Rope inside a shape immediately before and after. A clean slide leaves
+		// both at zero; a slide that goes wrong shows up as a jump here.
+		//
+		// The same-frame figure is not enough. On the 192009 capture a converged
+		// group slid off at frame 544 with 0.000 inside on both sides of the prune,
+		// and the rope was inside the shape by frame 550 and stayed there. The
+		// damage takes a few frames to open up, so the window below looks ahead.
+		double InsideBefore = 0.0;
+		double InsideAfter = 0.0;
+		double InsideWithinWindow = 0.0;
+		int32 InsideWindowFrame = IndexNone;
+	};
+
+	struct TAUTROPE_CORE_API SlideReport
+	{
+		std::vector<SlideEvent> Events;
+		int32 FramesWithRemoval = 0;
+		int32 TotalPointsRemoved = 0;
+		int32 EventsAtSharedVertex = 0;
+		int32 EventsThatBeganPenetration = 0;
+	};
+
+	TAUTROPE_CORE_API SlideReport AnalyseSlides(const Recording& InRecording, int32 LookaheadFrames = 30);
 
 	// Decades of the dimensionless conditioning number, so the distribution can be
 	// read rather than guessed at. Widening or narrowing the coplanar reject band

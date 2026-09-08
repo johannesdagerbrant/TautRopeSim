@@ -308,6 +308,190 @@ namespace TautRope
 		return Report;
 	}
 
+
+	SlideReport AnalyseSlides(const Recording& InRecording, int32 LookaheadFrames)
+	{
+		SlideReport Report;
+
+		std::vector<ShapePlanes> Planes;
+		Planes.reserve(InRecording.Shapes.size());
+		for (const CollisionShape& Shape : InRecording.Shapes)
+		{
+			Planes.push_back(FindShapePlanes(Shape));
+		}
+
+		std::vector<std::vector<bool>> InFace;
+		for (const CollisionShape& Shape : InRecording.Shapes)
+		{
+			std::vector<bool> Flags(static_cast<std::size_t>(Num(Shape.Edges)), false);
+			for (const int32 EdgeIndex : FindShapePlanes(Shape).InFaceEdges)
+			{
+				Flags[static_cast<std::size_t>(EdgeIndex)] = true;
+			}
+			InFace.push_back(std::move(Flags));
+		}
+
+		const auto RopeInside = [&Planes](const std::vector<RecordedPoint>& Points)
+		{
+			double Worst = 0.0;
+			for (int32 i = 0; i + 1 < Num(Points); ++i)
+			{
+				for (const ShapePlanes& P : Planes)
+				{
+					const double Length = SegmentInsideLength(P, Points[i].Location, Points[i + 1].Location);
+					if (Length > Worst) { Worst = Length; }
+				}
+			}
+			return Worst;
+		};
+
+		for (int32 FrameIndex = 0; FrameIndex < Num(InRecording.Frames); ++FrameIndex)
+		{
+			const FrameCapture& Capture = InRecording.Frames[FrameIndex].Capture;
+			const std::vector<RecordedPoint>& Before = Capture.AfterCollision;
+			const std::vector<RecordedPoint>& After = Capture.AfterPruning;
+
+			// Removed within this frame's pruning phase, so the comparison is against
+			// the state the pruning phase was handed rather than the previous frame.
+			std::vector<RecordedPoint> Removed;
+			for (const RecordedPoint& P : Before)
+			{
+				bool bSurvived = false;
+				for (const RecordedPoint& Q : After)
+				{
+					if (Q.Id == P.Id) { bSurvived = true; break; }
+				}
+				if (!bSurvived)
+				{
+					Removed.push_back(P);
+				}
+			}
+
+			if (Removed.empty())
+			{
+				continue;
+			}
+
+			SlideEvent Event;
+			Event.Frame = FrameIndex;
+			Event.PointsBefore = Num(Before);
+			Event.PointsRemoved = Num(Removed);
+			Event.InsideBefore = RopeInside(Before);
+			Event.InsideAfter = RopeInside(After);
+
+			// Do all the removed points sit on edges that meet at a single vertex?
+			// That is what a converged group sliding over a corner looks like.
+			bool bFirst = true;
+			bool bSharedStillPossible = true;
+			std::vector<int32> Candidates;
+			for (const RecordedPoint& P : Removed)
+			{
+				if (P.ShapeIndex < 0 || P.EdgeIndex < 0 || P.ShapeIndex >= Num(InRecording.Shapes))
+				{
+					bSharedStillPossible = false;
+					break;
+				}
+
+				if (InFace[P.ShapeIndex][static_cast<std::size_t>(P.EdgeIndex)])
+				{
+					Event.bAnyRemovedOnInFaceEdge = true;
+				}
+				else
+				{
+					Event.bAllRemovedOnInFaceEdge = false;
+				}
+
+				const Int2& Edge = InRecording.Shapes[P.ShapeIndex].Edges[P.EdgeIndex];
+				if (bFirst)
+				{
+					Event.SharedShapeIndex = P.ShapeIndex;
+					Candidates = { Edge.X, Edge.Y };
+					bFirst = false;
+					continue;
+				}
+
+				if (P.ShapeIndex != Event.SharedShapeIndex)
+				{
+					bSharedStillPossible = false;
+					break;
+				}
+
+				std::vector<int32> Kept;
+				for (const int32 Vert : Candidates)
+				{
+					if (Vert == Edge.X || Vert == Edge.Y)
+					{
+						Kept.push_back(Vert);
+					}
+				}
+				Candidates = Kept;
+				if (Candidates.empty())
+				{
+					bSharedStillPossible = false;
+					break;
+				}
+			}
+
+			if (bSharedStillPossible && !Candidates.empty())
+			{
+				Event.SharedVertIndex = Candidates[0];
+				++Report.EventsAtSharedVertex;
+			}
+			else
+			{
+				Event.SharedShapeIndex = IndexNone;
+			}
+
+			if (Event.bAnyRemovedOnInFaceEdge && Num(Removed) > 0)
+			{
+				Event.bAllRemovedOnInFaceEdge = true;
+				for (const RecordedPoint& P : Removed)
+				{
+					if (P.ShapeIndex < 0 || P.EdgeIndex < 0
+						|| !InFace[P.ShapeIndex][static_cast<std::size_t>(P.EdgeIndex)])
+					{
+						Event.bAllRemovedOnInFaceEdge = false;
+						break;
+					}
+				}
+			}
+
+			for (int32 i = 0; i + 1 < Num(Removed); ++i)
+			{
+				const double Gap = Vec3::Dist(Removed[i].Location, Removed[i + 1].Location);
+				if (Gap > Event.SpreadBefore) { Event.SpreadBefore = Gap; }
+			}
+
+			// How bad it gets over the next few frames, not just this one.
+			Event.InsideWithinWindow = Event.InsideAfter;
+			Event.InsideWindowFrame = FrameIndex;
+			for (int32 Ahead = 1; Ahead <= LookaheadFrames; ++Ahead)
+			{
+				const int32 Look = FrameIndex + Ahead;
+				if (Look >= Num(InRecording.Frames))
+				{
+					break;
+				}
+				const double Inside = RopeInside(InRecording.Frames[Look].Capture.AfterPruning);
+				if (Inside > Event.InsideWithinWindow)
+				{
+					Event.InsideWithinWindow = Inside;
+					Event.InsideWindowFrame = Look;
+				}
+			}
+
+			if (Event.InsideWithinWindow > Event.InsideBefore + 0.5)
+			{
+				++Report.EventsThatBeganPenetration;
+			}
+
+			++Report.FramesWithRemoval;
+			Report.TotalPointsRemoved += Event.PointsRemoved;
+			Report.Events.push_back(Event);
+		}
+
+		return Report;
+	}
 	std::vector<VertexApproach> AnalyseVertexApproaches(const Recording& InRecording, int32 MaxResults)
 	{
 		struct Track
@@ -399,11 +583,34 @@ namespace TautRope
 			T.Approach.FramesToArrive = T.Approach.FinalSpeed > 0.0
 				? T.Approach.EndDistance / T.Approach.FinalSpeed
 				: 0.0;
+
+			// Did the pair converge and get pruned? If either id is gone from the
+			// frame after the track ended, it arrived rather than drifted apart.
+			const int32 NextFrame = T.Approach.LastFrame + 1;
+			if (NextFrame < Num(InRecording.Frames))
+			{
+				bool bFoundA = false;
+				bool bFoundB = false;
+				for (const RecordedPoint& P : InRecording.Frames[NextFrame].Capture.AfterPruning)
+				{
+					if (P.Id == T.Approach.PointIdA) { bFoundA = true; }
+					if (P.Id == T.Approach.PointIdB) { bFoundB = true; }
+				}
+				T.Approach.bEndedByRemoval = !bFoundA || !bFoundB;
+			}
+
 			Out.push_back(T.Approach);
 		}
+		// Pairs that actually arrived come first, then whatever got closest.
+		// Ranking by track length buried every arrival behind the pairs that never
+		// got anywhere, which is how eleven arrivals went unnoticed.
 		std::sort(Out.begin(), Out.end(), [](const VertexApproach& L, const VertexApproach& R)
 			{
-				return (L.LastFrame - L.FirstFrame) > (R.LastFrame - R.FirstFrame);
+				if (L.bEndedByRemoval != R.bEndedByRemoval)
+				{
+					return L.bEndedByRemoval;
+				}
+				return L.EndDistance < R.EndDistance;
 			});
 		if (Num(Out) > MaxResults)
 		{

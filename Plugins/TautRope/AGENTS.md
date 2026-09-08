@@ -115,11 +115,32 @@ within 0.001, which is the opposite conclusion. A mirrored implementation
 diverges from the thing you are trying to measure, and it fails silently: the
 numbers still look plausible.
 
+**A rate is not a countdown, and arrivals are prunes.** When a converged group of
+rope points slides over a vertex, they do not glide across it: they close to
+hundredths of a unit and the pruning phase removes them in one frame. So the
+event to look for is a **drop in the point count**, which is what
+`--analyse slides` reports. Averaging a closing rate and dividing distance by it
+described a ramp that does not exist -- on a capture containing eleven arrivals
+it reported thousands of frames still to go, and `--analyse vertex` compounded
+that by ranking pairs by how long they survived, which sorted every arrival to
+the bottom of a top-five list. Both are fixed; the lesson is that a derived rate
+can be confidently wrong about a discrete event, so confirm against the raw
+per-frame counts.
+
+**The replay tool can regenerate recordings, so more capture detail never needs a
+human.** A recording stores the inputs -- shapes, initial state, `nextpointid`,
+and per-frame endpoints -- and replay is bit-identical, so `-o` reproduces the
+whole run. If a diagnosis needs the rope sampled more finely, add the capture,
+then re-derive it from recordings you already have. Do not ask for a new
+recording to get data that the inputs already determine; ask only when the
+*motion* itself is what you lack.
+
 | what | answers |
 |---|---|
 | `penetration` | does the rope pass through a shape, from which frame, how deep, and has it recovered by the end |
 | `edges` | how many shape edges lie flat across a face, and how often rope points rest on one |
-| `vertex` | for adjacent points on edges sharing a vertex, how fast they are closing on it |
+| `vertex` | for adjacent points on edges sharing a vertex, how fast they are closing, and which pairs arrived |
+| `slides` | frames where the pruning phase removed points: the rope sliding over a vertex, and whether penetration followed |
 | `ties` | sweeps that reached two edges at once, and whether either was dropped |
 | `conditioning` | how many sweep tests are degenerate, and how many of those produce a hit |
 
