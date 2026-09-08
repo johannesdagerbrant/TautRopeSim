@@ -379,6 +379,19 @@ namespace TautRope
 	ConditioningReport AnalyseConditioning(const Recording& InRecording, double CoplanarThreshold)
 	{
 		ConditioningReport Report;
+
+		std::vector<std::vector<bool>> IsInFaceEdge;
+		IsInFaceEdge.reserve(InRecording.Shapes.size());
+		for (const CollisionShape& Shape : InRecording.Shapes)
+		{
+			std::vector<bool> Flags(static_cast<std::size_t>(Num(Shape.Edges)), false);
+			for (const int32 EdgeIndex : FindShapePlanes(Shape).InFaceEdges)
+			{
+				Flags[static_cast<std::size_t>(EdgeIndex)] = true;
+			}
+			IsInFaceEdge.push_back(std::move(Flags));
+		}
+
 		for (const RecordedFrame& Frame : InRecording.Frames)
 		{
 			const std::vector<RecordedPoint>& Before = Frame.Capture.AfterMovement;
@@ -424,10 +437,23 @@ namespace TautRope
 								, Location, OnSweepEdge, Ratio);
 
 							++Report.Tests;
+							if (Conditioning <= 0.0)
+							{
+								++Report.ExactlyZero;
+							}
+							else
+							{
+								const int32 Decade = static_cast<int32>(-std::floor(std::log10(Conditioning)));
+								++Report.Decade[Math::Clamp(Decade - 1, 0, ConditioningDecades - 1)];
+							}
 							if (Conditioning < CoplanarThreshold)
 							{
 								++Report.NearCoplanar;
 								if (bHit) { ++Report.NearCoplanarAccepted; }
+								if (IsInFaceEdge[static_cast<std::size_t>(s)][static_cast<std::size_t>(e)])
+								{
+									++Report.NearCoplanarOnInFaceEdge;
+								}
 							}
 							else if (bHit)
 							{

@@ -393,6 +393,17 @@ namespace TautRope
 			// 100 of its iterations in a single frame (3 points -> 102), and the
 			// following frame hung. A flat surface has nothing to wrap, so the fix
 			// belongs upstream: do not offer coplanar edges to the rope at all.
+			//
+			// Tightening this threshold does not help, and that is measured, not
+			// assumed. Narrowing the reject band from KindaSmallNumber to
+			// SmallNumber admitted 186 extra sweeps out of 8.2 million and produced
+			// a bit-identical replay of a 1190 frame recording. The reason is in
+			// `--analyse conditioning`: of 3,652,016 near-coplanar tests, 3,649,210
+			// have Det *bitwise* zero. The boxes are axis aligned and the rope
+			// slides within a face plane, so the triple product cancels exactly.
+			// These are not badly conditioned, they are unsolvable -- InvDet below
+			// would divide by zero -- so no epsilon, padding or reformulation of
+			// this test reaches them.
 			return false;
 		}
 

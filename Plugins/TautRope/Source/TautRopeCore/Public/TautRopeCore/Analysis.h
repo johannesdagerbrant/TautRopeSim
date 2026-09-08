@@ -113,12 +113,29 @@ namespace TautRope
 	// The pair that gets closest to a shared vertex and stays there longest.
 	TAUTROPE_CORE_API std::vector<VertexApproach> AnalyseVertexApproaches(const Recording& InRecording, int32 MaxResults = 5);
 
+	// Decades of the dimensionless conditioning number, so the distribution can be
+	// read rather than guessed at. Widening or narrowing the coplanar reject band
+	// is only worth doing if tests actually land in the decades it would move.
+	inline constexpr int32 ConditioningDecades = 20;
+
 	struct TAUTROPE_CORE_API ConditioningReport
 	{
 		long long Tests = 0;
 		long long NearCoplanar = 0;
 		long long NearCoplanarAccepted = 0;
 		long long WellConditionedAccepted = 0;
+
+		// Det came out bitwise zero. No threshold reaches these: the method divides
+		// by Det, so they are unsolvable rather than badly conditioned.
+		long long ExactlyZero = 0;
+
+		// Of the near-coplanar tests, how many were against an edge lying flat
+		// across a face -- the edges a rope should never have been offered.
+		long long NearCoplanarOnInFaceEdge = 0;
+
+		// Decade[k] counts tests with conditioning in [1e-(k+1), 1e-k); the last
+		// bucket collects everything smaller but still nonzero.
+		long long Decade[ConditioningDecades] = {};
 	};
 
 	// Re-runs every sweep/edge pair the collision phase would have tested, using

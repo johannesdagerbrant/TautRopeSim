@@ -189,6 +189,24 @@ namespace
 		std::printf("  well conditioned, accepted  %lld\n", C.WellConditionedAccepted);
 		std::printf("  near coplanar               %lld\n", C.NearCoplanar);
 		std::printf("  near coplanar, accepted     %lld\n", C.NearCoplanarAccepted);
+		std::printf("  near coplanar, in-face edge %lld\n", C.NearCoplanarOnInFaceEdge);
+		std::printf("  Det bitwise zero            %lld\n", C.ExactlyZero);
+		std::printf("  conditioning by decade\n");
+		for (int i = 0; i < TautRope::ConditioningDecades; ++i)
+		{
+			if (C.Decade[i] == 0)
+			{
+				continue;
+			}
+			if (i == TautRope::ConditioningDecades - 1)
+			{
+				std::printf("    <1e-%-2d                   %lld\n", i, C.Decade[i]);
+			}
+			else
+			{
+				std::printf("    1e-%-2d .. 1e-%-2d            %lld\n", i + 1, i, C.Decade[i]);
+			}
+		}
 		if (C.NearCoplanar > 0 && C.NearCoplanarAccepted == 0)
 		{
 			std::printf("  every coplanar sweep was rejected: the rope slides flat across\n"

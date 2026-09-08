@@ -35,8 +35,7 @@ In the editor, with the level running: `tautrope.record 1`, reproduce the bug,
 
 ```
 cd Plugins/TautRope/Standalone
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
-cmake --build build
+./b.bat
 ./build/tautrope-replay <recording> --verify
 ```
 
@@ -56,7 +55,7 @@ before changing code, otherwise you cannot tell improvement from noise.
 **5. Closed loop. No human.** For each hypothesis:
 
 ```
-cmake --build build          # ~0.8 s for one core file
+./b.bat                      # ~0.2 s for one core file
 ./build/tautrope-tests       # ~60 ms, must stay green
 ./build/tautrope-replay <recording> --verify
 ```
@@ -125,6 +124,13 @@ many vertices lie on the plane through it -- a face contains its own corners, an
 edge only its two endpoints. Testing whether the plane merely supports the hull
 is not enough: the bevel plane through a silhouette edge supports it too.
 
+`conditioning` reports the distribution of the conditioning number by decade,
+how many sweeps had `Det` *bitwise* zero, and how many of the coplanar ones were
+against an in-face edge. The distribution is what tells you whether an epsilon
+change is worth trying: on the recordings so far, over 99.8% of near-coplanar
+sweeps have `Det` exactly zero, so they are unsolvable rather than badly
+conditioned, and no threshold reaches them.
+
 ---
 
 ## Reading a recording
@@ -166,6 +172,14 @@ between consecutive snapshots tells you what was inserted and removed. `shape`,
 ---
 
 ## Things that will bite you
+
+**Build with `Standalone/b.bat`, not bare `cmake --build`.** The compiler needs
+the MSVC environment, and `vcvars64.bat` costs ~1.5 s of what is otherwise a
+~0.2 s loop. `b.bat` caches that environment into `msvcenv.txt` on first use
+(gitignored, machine-specific) and configures the build dir if it is missing.
+Calling `cmake --build build` from a shell without the environment fails with
+`cannot open include file: 'cstdint'` -- and if you then run the test binary
+anyway, you are testing the *previous* build. Check the build succeeded.
 
 **`DeltaTime` is not a simulation input.** `UpdateRope(Start, End, MaxLength)`
 does not take it. State carries frame to frame through the rope points.
