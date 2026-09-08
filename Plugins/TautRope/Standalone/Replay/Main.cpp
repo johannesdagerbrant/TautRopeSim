@@ -265,7 +265,7 @@ namespace
 	// Re-runs the recorded inputs. The simulation is stateful, so the rope is
 	// seeded from the recorded initial state before the first frame; starting
 	// anywhere else diverges immediately.
-	TautRope::Recording Replay(const TautRope::Recording& Input, double& OutSeconds, int& OutCapHits, int& OutMostIterations)
+	TautRope::Recording Replay(const TautRope::Recording& Input, double& OutSeconds, int& OutCapHits, int& OutMostIterations, int& OutRemoveCapHits, int& OutMostRemoveSweep)
 	{
 		TautRope::Rope Rope;
 		Rope.AppendToNearbyShapes(Input.Shapes);
@@ -297,6 +297,8 @@ namespace
 		OutSeconds = std::chrono::duration<double>(End - Start).count();
 		OutCapHits = Rope.CollisionIterationCapHits;
 		OutMostIterations = Rope.MostCollisionIterations;
+		OutRemoveCapHits = Rope.RemoveSweepIterationCapHits;
+		OutMostRemoveSweep = Rope.MostRemoveSweepIterations;
 
 		return Result;
 	}
@@ -397,18 +399,23 @@ int main(int argc, char** argv)
 	double Seconds = 0.0;
 	int CapHits = 0;
 	int MostIterations = 0;
-	const TautRope::Recording Result = Replay(Input, Seconds, CapHits, MostIterations);
+	int RemoveCapHits = 0;
+	int MostRemoveSweep = 0;
+	const TautRope::Recording Result = Replay(Input, Seconds, CapHits, MostIterations, RemoveCapHits, MostRemoveSweep);
 
 	std::printf("\n");
 	PrintSummary(Result, "replayed");
 
 	std::printf("\n  collision iterations, worst frame %d of %d\n",
 		MostIterations, TautRope::MaxCollisionIterations);
-	if (CapHits > 0)
+	std::printf("  remove sweep rounds, worst frame %d of %d\n",
+		MostRemoveSweep, TautRope::MaxRemoveSweepIterations);
+	if (CapHits > 0 || RemoveCapHits > 0)
 	{
-		std::printf("  WARNING: %d frame(s) ran out of collision iterations. Points were\n"
-			"  still being inserted when the loop gave up, which is how runaway\n"
-			"  insertion presents: not a crash, just slower until it looks hung.\n", CapHits);
+		std::printf("  WARNING: %d frame(s) ran out of collision iterations and %d ran\n"
+			"  out of remove sweep rounds. Points were still being inserted when the\n"
+			"  loop gave up, which is how runaway insertion presents: not a crash,\n"
+			"  just slower until it looks hung.\n", CapHits, RemoveCapHits);
 	}
 	std::printf("\n  replayed in %.3f s", Seconds);
 	if (Seconds > 0.0)

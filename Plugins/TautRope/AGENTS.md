@@ -197,19 +197,23 @@ between consecutive snapshots tells you what was inserted and removed. `shape`,
 
 ## Things that will bite you
 
-**Reaching the collision iteration cap means the code is wrong.** `MaxCollisionIterations`
-is not a budget the solver is meant to spend. It exists for one reason: to stop
+**Reaching an iteration ceiling means the code is wrong.** `MaxCollisionIterations`
+and `MaxRemoveSweepIterations` are not budgets the solver is meant to spend. It exists for one reason: to stop
 point counts exploding exponentially, which freezes the simulation and then runs
-it out of memory. A healthy frame settles in about **2** iterations, so anything
-approaching 100 is a runaway, not a heavy frame, and the fix is never to raise
-the ceiling.
+it out of memory. A healthy frame settles in about **2** collision iterations and at
+most **3** remove-sweep rounds, so anything approaching 100 is a runaway, not a
+heavy frame, and the fix is never to raise the ceiling. `SweepRemovePoint` had
+no ceiling at all until recently: every round of its loop can insert a point,
+so a removal that did not converge could only present as a hang.
 
 It is enforced, not merely observed. `Rope::CollisionIterationCapHits` counts
 frames that exhausted the loop and `Rope::MostCollisionIterations` records the
 worst, `tautrope-replay` prints `collision iterations, worst frame N of 100` on
 every run and warns when any frame hit the cap, and
 `Simulation_NeverExhaustsCollisionIterations` fails the suite outright if one
-does. This exists because a hypothesis in this area once inserted a point on all
+does -- though note its output: the synthetic fixture never triggers the remove
+sweep, so that half of it currently asserts nothing, and the test says so
+rather than looking green. This exists because a hypothesis in this area once inserted a point on all
 100 iterations of a single frame -- 3 points became 102 -- and the next frame
 appeared to hang, which cost far more time to diagnose than to detect. Whatever
 else a change improves, if it trips this it is wrong.

@@ -46,6 +46,9 @@ namespace TautRope
 		, const std::vector<CollisionShape>& Shapes
 		, int32& InOutNextPointId
 		, IDebugDraw* Debug = nullptr
+		// Rounds of the remove sweep this call used. Each round past the first
+		// inserts a rope point, so the caller needs to see when it ran long.
+		, int32* OutIterations = nullptr
 	);
 
 	TAUTROPE_CORE_API void SweepSegmentThroughShapes(

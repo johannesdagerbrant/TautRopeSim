@@ -49,6 +49,10 @@ namespace TautRope
 		int32 CollisionIterationCapHits = 0;
 		int32 MostCollisionIterations = 0;
 
+		// The same two numbers for the remove sweep inside the pruning phase.
+		int32 RemoveSweepIterationCapHits = 0;
+		int32 MostRemoveSweepIterations = 0;
+
 	private:
 		std::vector<Vec3> MovementPhase(
 			const Vec3& StartLocation

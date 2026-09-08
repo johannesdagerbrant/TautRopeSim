@@ -11,6 +11,12 @@ namespace TautRope
 
 	inline constexpr int32 MaxCollisionIterations = 100;
 
+	// Same purpose as MaxCollisionIterations, for the remove sweep in
+	// SweepRemovePoint: every round of that loop can insert a rope point, so
+	// without a ceiling a non-converging removal grows the rope until memory
+	// runs out. Reaching either ceiling is a bug, never a heavy frame.
+	inline constexpr int32 MaxRemoveSweepIterations = 100;
+
 	// Two edges are reached by the same sweep at the same moment when the sweep
 	// crosses the vertex they share. Which one has the marginally smaller ratio
 	// is arbitrary, so both are reported rather than one being discarded.

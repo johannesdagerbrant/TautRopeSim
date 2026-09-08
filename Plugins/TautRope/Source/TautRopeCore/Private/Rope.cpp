@@ -319,7 +319,16 @@ namespace TautRope
 		{
 			if (PointsToRemove[i])
 			{
-				SweepRemovePoint(RopePoints, i, NearbyShapes, NextPointId, Debug);
+				int32 RemoveSweepIterations = 0;
+				SweepRemovePoint(RopePoints, i, NearbyShapes, NextPointId, Debug, &RemoveSweepIterations);
+				if (RemoveSweepIterations > MostRemoveSweepIterations)
+				{
+					MostRemoveSweepIterations = RemoveSweepIterations;
+				}
+				if (RemoveSweepIterations >= MaxRemoveSweepIterations)
+				{
+					++RemoveSweepIterationCapHits;
+				}
 			}
 		}
 		return std::find(PointsToRemove.begin(), PointsToRemove.end(), true) != PointsToRemove.end();

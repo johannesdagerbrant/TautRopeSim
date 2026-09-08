@@ -53,6 +53,8 @@ namespace
 		int MaxPointCount = 0;
 		int CollisionIterationCapHits = 0;
 		int MostCollisionIterations = 0;
+		int RemoveSweepIterationCapHits = 0;
+		int MostRemoveSweepIterations = 0;
 		std::vector<TautRope::Point> FinalPoints;
 	};
 
@@ -78,6 +80,8 @@ namespace
 		Result.FinalPoints = Rope.GetPoints();
 		Result.CollisionIterationCapHits = Rope.CollisionIterationCapHits;
 		Result.MostCollisionIterations = Rope.MostCollisionIterations;
+		Result.RemoveSweepIterationCapHits = Rope.RemoveSweepIterationCapHits;
+		Result.MostRemoveSweepIterations = Rope.MostRemoveSweepIterations;
 		return Result;
 	}
 }
@@ -141,23 +145,36 @@ TEST(Simulation_WrapsShapeWhenEndIsSweptAround)
 	}
 }
 
-// The iteration cap is a backstop against point counts exploding until the
-// simulation freezes and runs out of memory, not a budget the solver is meant to
-// spend. Reaching it means the collision phase never settled, so this is a hard
+// Both iteration ceilings are backstops against point counts exploding until the
+// simulation freezes and runs out of memory, not budgets the solver is meant to
+// spend. Reaching either means the loop never settled, so this is a hard
 // invariant: any hypothesis that trips it is wrong, however good its other
-// numbers look.
+// numbers look. SweepRemovePoint had no ceiling at all until this was added, so
+// a non-converging removal there could only present as a hang.
 TEST(Simulation_NeverExhaustsCollisionIterations)
 {
 	const SweepResult Result = SweepAroundShape(360);
 	CHECK_EQ(Result.CollisionIterationCapHits, 0);
+	CHECK_EQ(Result.RemoveSweepIterationCapHits, 0);
 	CHECK(Result.MostCollisionIterations < TautRope::MaxCollisionIterations);
-	std::printf("      worst frame settled in %d of %d collision iterations\n",
-		Result.MostCollisionIterations, TautRope::MaxCollisionIterations);
-	if (Result.CollisionIterationCapHits > 0)
+	CHECK(Result.MostRemoveSweepIterations < TautRope::MaxRemoveSweepIterations);
+	std::printf("      worst frame settled in %d of %d collision iterations,"
+		" %d of %d remove-sweep rounds\n",
+		Result.MostCollisionIterations, TautRope::MaxCollisionIterations,
+		Result.MostRemoveSweepIterations, TautRope::MaxRemoveSweepIterations);
+	if (Result.MostRemoveSweepIterations == 0)
 	{
-		std::printf("      %d frame(s) hit the cap: points were still being inserted\n"
-			"      when the loop gave up, which is runaway insertion\n",
-			Result.CollisionIterationCapHits);
+		// Said out loud because a ceiling nothing reaches is a ceiling nothing
+		// tests. The recordings do exercise it (up to 3 rounds), this fixture
+		// does not.
+		std::printf("      note: the remove sweep never ran, so its ceiling is\n"
+			"      untested by this fixture\n");
+	}
+	if (Result.CollisionIterationCapHits > 0 || Result.RemoveSweepIterationCapHits > 0)
+	{
+		std::printf("      %d collision and %d remove-sweep frame(s) hit the cap:\n"
+			"      points were still being inserted when the loop gave up\n",
+			Result.CollisionIterationCapHits, Result.RemoveSweepIterationCapHits);
 	}
 }
 

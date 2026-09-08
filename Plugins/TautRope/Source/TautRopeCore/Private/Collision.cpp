@@ -12,6 +12,7 @@ namespace TautRope
 		, const std::vector<CollisionShape>& Shapes
 		, int32& InOutNextPointId
 		, IDebugDraw* Debug
+		, int32* OutIterations
 	)
 	{
 		TAUTROPE_ENSURE(RemovePointIndex > 0 && RemovePointIndex < Num(RopePoints));
@@ -29,10 +30,18 @@ namespace TautRope
 			, Int2(RopePoints[RemovePointIndex + 1].ShapeIndex, RopePoints[RemovePointIndex + 1].EdgeIndex)
 		};
 
+		// Each round past the first inserts a rope point, and nothing here
+		// guarantees the sweep stops finding contacts. Unbounded, a removal that
+		// does not converge grows the rope until the process runs out of memory,
+		// with no symptom other than the frame getting slower. Bounded, it stops
+		// and reports, which is what the caller turns into a failed invariant.
+		int32 Iterations = 0;
+
 		HitData Hit;
 		Hit.bIsHit = true;
-		while (Hit.bIsHit)
+		while (Hit.bIsHit && Iterations < MaxRemoveSweepIterations)
 		{
+			++Iterations;
 			Hit = HitData();
 			for (int32 ShapeIndex = 0; ShapeIndex < Num(Shapes); ++ShapeIndex)
 			{
@@ -83,6 +92,11 @@ namespace TautRope
 				};
 			}
 		}
+		if (OutIterations != nullptr)
+		{
+			*OutIterations = Iterations;
+		}
+
 		if (!bFoundIntersections)
 		{
 			RopePoints.erase(RopePoints.begin() + RemovePointIndex);
