@@ -25,3 +25,9 @@ Regenerate VS Code project files with `-projectfiles -vscode`.
 
 The rope system lives in the `TautRope` plugin (`Plugins/TautRope`), not in the
 `TautRopeSim` game module.
+
+## Working on the rope simulation
+
+See `Plugins/TautRope/AGENTS.md`. It covers the flight recorder, the headless
+replay, the debugging loop, and the traps -- several of which have already cost
+a crash and a wrong-looking divergence.
