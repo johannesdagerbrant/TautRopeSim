@@ -64,3 +64,13 @@ endif()
 
 add_executable(tautrope-replay "${CMAKE_CURRENT_SOURCE_DIR}/Replay/Main.cpp")
 target_link_libraries(tautrope-replay PRIVATE tautrope_core)
+
+# The persistent hardening: recordings get deleted once a fix lands, these stay.
+# Deliberately dependency-free, so the whole standalone side is one cmake call.
+file(GLOB TAUTROPE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Tests/*.cpp")
+add_executable(tautrope-tests ${TAUTROPE_TEST_SOURCES})
+target_link_libraries(tautrope-tests PRIVATE tautrope_core)
+target_include_directories(tautrope-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Tests")
+
+enable_testing()
+add_test(NAME core COMMAND tautrope-tests)
