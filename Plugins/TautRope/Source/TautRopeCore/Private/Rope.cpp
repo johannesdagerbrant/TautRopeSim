@@ -229,14 +229,58 @@ namespace TautRope
 			for (int32 i = Num(SegmentSweepHits) - 1; i >= 0; --i)
 			{
 				const HitData& Hit = SegmentSweepHits[i];
-				Point Inserted(Hit);
-				Inserted.Id = NextPointId++;
-				RopePoints.insert(RopePoints.begin() + Hit.RopePointIndex, Inserted);
-				OriginRopePoints.insert(OriginRopePoints.begin() + Hit.RopePointIndex, Hit.Location);
-				TargetRopePoints.insert(TargetRopePoints.begin() + Hit.RopePointIndex, Hit.Location);
+
+				// The sweep can reach several edges at once, which is what happens when
+				// it crosses the vertex they share. Insert a point for each, ordered
+				// along the rope by distance from the preceding point, so the chain
+				// stays monotonic. Keeping only the nearest hit here is what let the
+				// rope skip an edge and then meet it later as a fresh collision, with
+				// the rope line already cutting through the solid.
+				std::vector<Point> Group;
+				Group.reserve(Hit.TiedHits.size() + 1);
+				Group.push_back(Point(Hit));
+
+				for (const TiedHit& Tied : Hit.TiedHits)
+				{
+					Point Extra(Hit);
+					Extra.Location = Tied.Location;
+					Extra.ShapeIndex = Tied.ShapeIndex;
+					Extra.EdgeIndex = Tied.EdgeIndex;
+					Extra.VertIndex = IndexNone;
+					Group.push_back(Extra);
+				}
+
+				const Vec3& PrecedingLocation = OriginRopePoints[Hit.RopePointIndex - 1];
+				std::stable_sort(
+					Group.begin()
+					, Group.end()
+					, [&PrecedingLocation](const Point& A, const Point& B)
+					{
+						return (A.Location - PrecedingLocation).SizeSquared()
+							< (B.Location - PrecedingLocation).SizeSquared();
+					}
+				);
+
+				for (int32 g = Num(Group) - 1; g >= 0; --g)
+				{
+					Point Inserted = Group[g];
+					Inserted.Id = NextPointId++;
+					RopePoints.insert(RopePoints.begin() + Hit.RopePointIndex, Inserted);
+					OriginRopePoints.insert(OriginRopePoints.begin() + Hit.RopePointIndex, Inserted.Location);
+					TargetRopePoints.insert(TargetRopePoints.begin() + Hit.RopePointIndex, Inserted.Location);
+				}
 			}
 			bIsAnyNewCollision = !SegmentSweepHits.empty();
 			CollisionItr++;
+		}
+
+		if (CollisionItr > MostCollisionIterations)
+		{
+			MostCollisionIterations = CollisionItr;
+		}
+		if (CollisionItr >= MaxCollisionIterations)
+		{
+			++CollisionIterationCapHits;
 		}
 		return false;
 	}

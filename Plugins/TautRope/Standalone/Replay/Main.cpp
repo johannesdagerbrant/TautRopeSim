@@ -3,6 +3,7 @@
 //
 // The point is iteration speed: change core, rebuild core, replay, look at what
 // moved. Nothing here waits for DeltaTime.
+#include "TautRopeCore/Config.h"
 #include "TautRopeCore/Analysis.h"
 #include "TautRopeCore/Compare.h"
 #include "TautRopeCore/Recording.h"
@@ -264,7 +265,7 @@ namespace
 	// Re-runs the recorded inputs. The simulation is stateful, so the rope is
 	// seeded from the recorded initial state before the first frame; starting
 	// anywhere else diverges immediately.
-	TautRope::Recording Replay(const TautRope::Recording& Input, double& OutSeconds)
+	TautRope::Recording Replay(const TautRope::Recording& Input, double& OutSeconds, int& OutCapHits, int& OutMostIterations)
 	{
 		TautRope::Rope Rope;
 		Rope.AppendToNearbyShapes(Input.Shapes);
@@ -294,6 +295,8 @@ namespace
 		}
 		const auto End = std::chrono::steady_clock::now();
 		OutSeconds = std::chrono::duration<double>(End - Start).count();
+		OutCapHits = Rope.CollisionIterationCapHits;
+		OutMostIterations = Rope.MostCollisionIterations;
 
 		return Result;
 	}
@@ -392,11 +395,21 @@ int main(int argc, char** argv)
 	}
 
 	double Seconds = 0.0;
-	const TautRope::Recording Result = Replay(Input, Seconds);
+	int CapHits = 0;
+	int MostIterations = 0;
+	const TautRope::Recording Result = Replay(Input, Seconds, CapHits, MostIterations);
 
 	std::printf("\n");
 	PrintSummary(Result, "replayed");
 
+	std::printf("\n  collision iterations, worst frame %d of %d\n",
+		MostIterations, TautRope::MaxCollisionIterations);
+	if (CapHits > 0)
+	{
+		std::printf("  WARNING: %d frame(s) ran out of collision iterations. Points were\n"
+			"  still being inserted when the loop gave up, which is how runaway\n"
+			"  insertion presents: not a crash, just slower until it looks hung.\n", CapHits);
+	}
 	std::printf("\n  replayed in %.3f s", Seconds);
 	if (Seconds > 0.0)
 	{

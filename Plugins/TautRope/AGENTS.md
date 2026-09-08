@@ -120,6 +120,7 @@ numbers still look plausible.
 | `penetration` | does the rope pass through a shape, from which frame, how deep, and has it recovered by the end |
 | `edges` | how many shape edges lie flat across a face, and how often rope points rest on one |
 | `vertex` | for adjacent points on edges sharing a vertex, how fast they are closing on it |
+| `ties` | sweeps that reached two edges at once, and whether either was dropped |
 | `conditioning` | how many sweep tests are degenerate, and how many of those produce a hit |
 
 Two things worth knowing about the numbers:
@@ -137,6 +138,21 @@ are.
 many vertices lie on the plane through it -- a face contains its own corners, an
 edge only its two endpoints. Testing whether the plane merely supports the hull
 is not enough: the bevel plane through a silhouette edge supports it too.
+
+`ties` reports sweeps that reached more than one edge at the same sweep ratio.
+That happens when the sweep crosses a vertex: both edges meeting there are
+crossed at the same instant. `SweepSegmentTriangleAgainstShape` used to keep a
+single hit and compare with a strict `<`, so the loser was never reported and
+which edge the rope attached to came down to iteration order. It now records
+every edge within `SweepRatioTieTolerance` in `HitData::TiedHits`, and the
+collision phase inserts a point for each, ordered along the rope by distance
+from the preceding point.
+
+Watch the `collision iterations, worst frame N of 100` line the replay prints. A
+healthy frame settles in about 2. Reaching the cap means points were still being
+inserted when the loop gave up, which is how runaway insertion presents -- not a
+crash, just slower every frame until it looks hung. The replay warns when any
+frame hits it.
 
 `conditioning` reports the distribution of the conditioning number by decade,
 how many sweeps had `Det` *bitwise* zero, and how many of the coplanar ones were

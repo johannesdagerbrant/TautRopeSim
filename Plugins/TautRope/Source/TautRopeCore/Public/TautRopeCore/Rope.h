@@ -41,6 +41,14 @@ namespace TautRope
 		const std::vector<Point>& GetPoints() const { return RopePoints; }
 		const std::vector<CollisionShape>& GetNearbyShapes() const { return NearbyShapes; }
 
+		// Number of frames whose collision phase ran out of iterations instead of
+		// settling. Non-zero means points were still being inserted when the loop
+		// gave up, which is how runaway insertion presents: the frame does not
+		// crash, it just gets slower until it looks like a hang. Watched by the
+		// tests and printed by the replay tool.
+		int32 CollisionIterationCapHits = 0;
+		int32 MostCollisionIterations = 0;
+
 	private:
 		std::vector<Vec3> MovementPhase(
 			const Vec3& StartLocation
