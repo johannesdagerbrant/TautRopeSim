@@ -1,0 +1,129 @@
+#pragma once
+
+#include "TautRopeCore/CollisionShape.h"
+#include "TautRopeCore/Core.h"
+#include "TautRopeCore/Math.h"
+#include "TautRopeCore/Recording.h"
+
+#include <vector>
+
+// Measurements over a recording. These live in core rather than in the replay
+// CLI so the unit tests can assert on the same numbers an agent reads, and so
+// they run at compiled speed -- the alternative, ad-hoc scripting over the text
+// format, is thousands of times slower than the loop it serves.
+namespace TautRope
+{
+	// A convex hull's face planes, recovered from what a shape actually stores.
+	//
+	// Each edge carries a rotation whose up vector is the average of its adjacent
+	// face normals. For an edge in the middle of a flat face -- the diagonal every
+	// quad face gets when triangulated -- both adjacent triangles are coplanar, so
+	// that average IS the face normal and the plane through the edge supports the
+	// whole hull. For a real silhouette edge the average points between two faces
+	// and the plane cuts through. Testing which is which therefore identifies the
+	// face planes and the in-face edges at the same time.
+	struct TAUTROPE_CORE_API ShapePlanes
+	{
+		std::vector<Vec3> Points;
+		std::vector<Vec3> Normals;
+
+		// Edges whose plane supports the hull, i.e. edges lying flat across a face.
+		// A rope point should never rest on one.
+		std::vector<int32> InFaceEdges;
+
+		// Fewer than four planes cannot bound a volume, so the penetration numbers
+		// below are not trustworthy for this shape.
+		bool IsUsable() const { return Points.size() >= 4; }
+	};
+
+	TAUTROPE_CORE_API ShapePlanes FindShapePlanes(const CollisionShape& Shape, double Tolerance = 0.05);
+
+	// How far inside the hull the point sits; 0 when outside.
+	TAUTROPE_CORE_API double PointPenetrationDepth(const ShapePlanes& Planes, const Vec3& Point);
+
+	// Length of segment AB lying inside the hull. This is what "the rope line
+	// intersects the shape" means: both endpoints can sit on the surface while the
+	// line between them cuts straight through.
+	TAUTROPE_CORE_API double SegmentInsideLength(const ShapePlanes& Planes, const Vec3& A, const Vec3& B);
+
+	// |Det| normalised by the three edge lengths, as GetTriangleLineIntersection
+	// sees it. Near zero means the sweep triangle and the edge are coplanar, which
+	// that routine cannot solve. Dimensionless, so it is comparable across scales.
+	TAUTROPE_CORE_API double SweepConditioning(
+		const Vec3& FromCorner
+		, const Vec3& ToCorner
+		, const Vec3& SupportCorner
+		, const Vec3& LineA
+		, const Vec3& LineB
+	);
+
+	struct TAUTROPE_CORE_API PenetrationReport
+	{
+		int32 FirstFrame = IndexNone;
+		int32 FramesAffected = 0;
+		int32 FramesCompared = 0;
+
+		double PeakSegmentLength = 0.0;
+		int32 PeakSegmentFrame = IndexNone;
+		int32 PeakSegmentShape = IndexNone;
+		int32 PeakSegmentPointA = IndexNone;
+		int32 PeakSegmentPointB = IndexNone;
+
+		double PeakPointDepth = 0.0;
+		int32 PeakPointFrame = IndexNone;
+		int32 PeakPointId = IndexNone;
+
+		double FinalSegmentLength = 0.0;
+		bool bAnyShapeUnusable = false;
+	};
+
+	TAUTROPE_CORE_API PenetrationReport AnalysePenetration(const Recording& InRecording, double Tolerance = 0.5);
+
+	struct TAUTROPE_CORE_API EdgeUsageReport
+	{
+		int32 TotalEdges = 0;
+		int32 InFaceEdges = 0;
+		int32 AttachedPointFrames = 0;
+		int32 PointFramesOnInFaceEdges = 0;
+		int32 FirstFrameOnInFaceEdge = IndexNone;
+		int32 FirstPointIdOnInFaceEdge = IndexNone;
+		int32 FirstInFaceEdgeIndex = IndexNone;
+		int32 FirstInFaceShapeIndex = IndexNone;
+	};
+
+	TAUTROPE_CORE_API EdgeUsageReport AnalyseEdgeUsage(const Recording& InRecording);
+
+	// Two adjacent points on edges that meet at a vertex, tracked as they close on
+	// it. This is how the convergence slowdown is measured.
+	struct TAUTROPE_CORE_API VertexApproach
+	{
+		int32 FirstFrame = IndexNone;
+		int32 LastFrame = IndexNone;
+		int32 PointIdA = IndexNone;
+		int32 PointIdB = IndexNone;
+		int32 ShapeIndex = IndexNone;
+		int32 VertIndex = IndexNone;
+
+		double StartDistance = 0.0;
+		double EndDistance = 0.0;
+		double FinalSpeed = 0.0;      // units per frame, averaged over the tail
+		double FramesToArrive = 0.0;  // at FinalSpeed; infinite in effect if it stalls
+	};
+
+	// The pair that gets closest to a shared vertex and stays there longest.
+	TAUTROPE_CORE_API std::vector<VertexApproach> AnalyseVertexApproaches(const Recording& InRecording, int32 MaxResults = 5);
+
+	struct TAUTROPE_CORE_API ConditioningReport
+	{
+		long long Tests = 0;
+		long long NearCoplanar = 0;
+		long long NearCoplanarAccepted = 0;
+		long long WellConditionedAccepted = 0;
+	};
+
+	// Re-runs every sweep/edge pair the collision phase would have tested, using
+	// the recorded before and after positions, and reports how many were
+	// degenerate. A high near-coplanar count with zero accepted means the rope is
+	// sliding flat across edges that are never registering.
+	TAUTROPE_CORE_API ConditioningReport AnalyseConditioning(const Recording& InRecording, double CoplanarThreshold = 1.0e-6);
+}

@@ -83,11 +83,47 @@ tautrope-replay <recording>              replay, report what it produced
 tautrope-replay <recording> --verify     compare against the captured output
 tautrope-replay <recording> -o <path>    write the replay result out
 tautrope-replay --info <recording>       summarise without replaying
+tautrope-replay <recording> --analyse <what>
 tautrope-tests                           run all tests
 tautrope-tests <substring>               run tests whose name matches
 ```
 
 Exit codes: `0` ok, `1` error, `2` usage, `3` verify failed.
+
+### Measuring a recording
+
+`--analyse` takes `penetration`, `edges`, `vertex`, `conditioning` or `all`. It
+reads the captured data and does not replay, so it answers step 3 in
+milliseconds.
+
+**Do not write scripts to do this.** The measurements below exist because they
+were first written as throwaway Python, which took minutes per pass against a
+loop that is about two seconds end to end. If you need a measurement that is not
+here, add it to `TautRopeCore/Analysis.h` so the next run is fast and the unit
+tests can assert on it.
+
+| what | answers |
+|---|---|
+| `penetration` | does the rope pass through a shape, from which frame, how deep, and has it recovered by the end |
+| `edges` | how many shape edges lie flat across a face, and how often rope points rest on one |
+| `vertex` | for adjacent points on edges sharing a vertex, how fast they are closing on it |
+| `conditioning` | how many sweep tests are degenerate, and how many of those produce a hit |
+
+Two things worth knowing about the numbers:
+
+`penetration` measures the rope **line**, not just its points. Both endpoints can
+sit on the surface while the segment between them cuts through the solid, which
+is the usual form the defect takes. It also shrinks each shape by a small surface
+tolerance first: rope points rest on the surface by design, so without that the
+answer for a segment lying flat against a face flips between zero and the full
+width of the face on rounding alone. A first attempt at this measurement, written
+in Python without the tolerance, reported 27x more affected frames than there
+are.
+
+`edges` distinguishes a real silhouette edge from a triangulation diagonal by how
+many vertices lie on the plane through it -- a face contains its own corners, an
+edge only its two endpoints. Testing whether the plane merely supports the hull
+is not enough: the bevel plane through a silhouette edge supports it too.
 
 ---
 

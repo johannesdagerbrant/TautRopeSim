@@ -3,6 +3,7 @@
 //
 // The point is iteration speed: change core, rebuild core, replay, look at what
 // moved. Nothing here waits for DeltaTime.
+#include "TautRopeCore/Analysis.h"
 #include "TautRopeCore/Compare.h"
 #include "TautRopeCore/Recording.h"
 #include "TautRopeCore/Rope.h"
@@ -26,6 +27,8 @@ namespace
 			"  -o <path>   write the replayed result as a recording\n"
 			"  --verify    compare the replay against the captured output\n"
 			"  --info      summarise the input and exit without replaying\n"
+			"  --analyse <what>   measure the recording without replaying;\n"
+			"              what = penetration | edges | vertex | conditioning | all\n"
 			"\n"
 			"exit codes:\n"
 			"  0 ok   1 error   2 usage   3 verify failed\n"
@@ -102,6 +105,97 @@ namespace
 		}
 	}
 
+	void PrintPenetration(const TautRope::Recording& R)
+	{
+		const TautRope::PenetrationReport P = TautRope::AnalysePenetration(R);
+		std::printf("penetration\n");
+		if (P.bAnyShapeUnusable)
+		{
+			std::printf("  warning: at least one shape yielded fewer than 4 face planes,\n"
+				"           so its numbers below are not trustworthy\n");
+		}
+		for (std::size_t i = 0; i < R.Shapes.size(); ++i)
+		{
+			const TautRope::ShapePlanes Pl = TautRope::FindShapePlanes(R.Shapes[i]);
+			std::printf("  shape %zu: %zu face planes from %zu in-face edges\n",
+				i, Pl.Points.size(), Pl.InFaceEdges.size());
+		}
+		std::printf("  frames affected   %d of %d\n", P.FramesAffected, P.FramesCompared);
+		if (P.FirstFrame == TautRope::IndexNone)
+		{
+			std::printf("  no rope segment passes through a shape\n");
+			return;
+		}
+		std::printf("  first at frame    %d\n", P.FirstFrame);
+		std::printf("  worst rope line   %.3f units inside shape %d at frame %d (point ids %d and %d)\n",
+			P.PeakSegmentLength, P.PeakSegmentShape, P.PeakSegmentFrame, P.PeakSegmentPointA, P.PeakSegmentPointB);
+		std::printf("  deepest point     %.3f units inside, point id %d at frame %d\n",
+			P.PeakPointDepth, P.PeakPointId, P.PeakPointFrame);
+		std::printf("  at the last frame %.3f units of rope still inside\n", P.FinalSegmentLength);
+	}
+
+	void PrintEdges(const TautRope::Recording& R)
+	{
+		const TautRope::EdgeUsageReport E = TautRope::AnalyseEdgeUsage(R);
+		std::printf("edges\n");
+		std::printf("  %d edges across %zu shapes, of which %d lie flat across a face\n",
+			E.TotalEdges, R.Shapes.size(), E.InFaceEdges);
+		std::printf("  rope points attached to an edge: %d point-frames\n", E.AttachedPointFrames);
+		std::printf("  of those, on an in-face edge:    %d (%.1f%%)\n",
+			E.PointFramesOnInFaceEdges,
+			100.0 * E.PointFramesOnInFaceEdges / (E.AttachedPointFrames > 0 ? E.AttachedPointFrames : 1));
+		if (E.FirstFrameOnInFaceEdge != TautRope::IndexNone)
+		{
+			std::printf("  first at frame %d: point id %d on shape %d edge %d\n",
+				E.FirstFrameOnInFaceEdge, E.FirstPointIdOnInFaceEdge,
+				E.FirstInFaceShapeIndex, E.FirstInFaceEdgeIndex);
+			std::printf("  a point resting on an in-face edge sits in the middle of a flat\n"
+				"  face, so the rope line to its neighbour can pass through the solid\n");
+		}
+	}
+
+	void PrintVertexApproaches(const TautRope::Recording& R)
+	{
+		const std::vector<TautRope::VertexApproach> V = TautRope::AnalyseVertexApproaches(R);
+		std::printf("vertex approaches\n");
+		if (V.empty())
+		{
+			std::printf("  no adjacent points sharing a vertex for long enough to measure\n");
+			return;
+		}
+		for (const TautRope::VertexApproach& A : V)
+		{
+			std::printf("  ids %d/%d on shape %d vertex %d, frames %d..%d\n",
+				A.PointIdA, A.PointIdB, A.ShapeIndex, A.VertIndex, A.FirstFrame, A.LastFrame);
+			std::printf("    distance %.3f -> %.3f, closing at %.8f units/frame\n",
+				A.StartDistance, A.EndDistance, A.FinalSpeed);
+			if (A.FinalSpeed > 0.0)
+			{
+				std::printf("    at that rate, %.0f more frames to reach the vertex (%.1f minutes at 60fps)\n",
+					A.FramesToArrive, A.FramesToArrive / 3600.0);
+			}
+			else
+			{
+				std::printf("    not closing at all over the measured tail\n");
+			}
+		}
+	}
+
+	void PrintConditioning(const TautRope::Recording& R)
+	{
+		const TautRope::ConditioningReport C = TautRope::AnalyseConditioning(R);
+		std::printf("sweep conditioning\n");
+		std::printf("  sweep/edge tests            %lld\n", C.Tests);
+		std::printf("  well conditioned, accepted  %lld\n", C.WellConditionedAccepted);
+		std::printf("  near coplanar               %lld\n", C.NearCoplanar);
+		std::printf("  near coplanar, accepted     %lld\n", C.NearCoplanarAccepted);
+		if (C.NearCoplanar > 0 && C.NearCoplanarAccepted == 0)
+		{
+			std::printf("  every coplanar sweep was rejected: the rope slides flat across\n"
+				"  those edges without registering them\n");
+		}
+	}
+
 	// Re-runs the recorded inputs. The simulation is stateful, so the rope is
 	// seeded from the recorded initial state before the first frame; starting
 	// anywhere else diverges immediately.
@@ -146,6 +240,7 @@ int main(int argc, char** argv)
 	const char* OutputPath = nullptr;
 	bool bInfoOnly = false;
 	bool bVerify = false;
+	const char* Analyse = nullptr;
 
 	for (int Index = 1; Index < argc; ++Index)
 	{
@@ -157,6 +252,16 @@ int main(int argc, char** argv)
 		else if (std::strcmp(Arg, "--verify") == 0)
 		{
 			bVerify = true;
+		}
+		else if (std::strcmp(Arg, "--analyse") == 0 || std::strcmp(Arg, "--analyze") == 0)
+		{
+			if (Index + 1 >= argc)
+			{
+				std::fprintf(stderr, "tautrope-replay: --analyse needs one of "
+					"penetration, edges, vertex, conditioning, all\n");
+				return 2;
+			}
+			Analyse = argv[++Index];
 		}
 		else if (std::strcmp(Arg, "-o") == 0)
 		{
@@ -198,6 +303,22 @@ int main(int argc, char** argv)
 	}
 
 	PrintSummary(Input, "recorded");
+
+	if (Analyse != nullptr)
+	{
+		const bool bAll = std::strcmp(Analyse, "all") == 0;
+		bool bKnown = bAll;
+		if (bAll || std::strcmp(Analyse, "penetration") == 0)  { std::printf("\n"); PrintPenetration(Input); bKnown = true; }
+		if (bAll || std::strcmp(Analyse, "edges") == 0)        { std::printf("\n"); PrintEdges(Input); bKnown = true; }
+		if (bAll || std::strcmp(Analyse, "vertex") == 0)       { std::printf("\n"); PrintVertexApproaches(Input); bKnown = true; }
+		if (bAll || std::strcmp(Analyse, "conditioning") == 0) { std::printf("\n"); PrintConditioning(Input); bKnown = true; }
+		if (!bKnown)
+		{
+			std::fprintf(stderr, "tautrope-replay: unknown analysis %s\n", Analyse);
+			return 2;
+		}
+		return 0;
+	}
 
 	if (bInfoOnly)
 	{
