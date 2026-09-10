@@ -8,7 +8,7 @@
 #   cmake --build build
 #
 cmake_minimum_required(VERSION 3.20)
-project(TautRopeStandalone CXX)
+project(TautRopeHeadless CXX)
 
 # C++20 to match what UBT gives the editor build (/std:c++20). Compiling the
 # same sources under two language standards is a correctness hazard well beyond

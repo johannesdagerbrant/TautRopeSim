@@ -16,7 +16,7 @@ you replay it headlessly, in milliseconds, against code you just changed.
 |---|---|
 | `Source/TautRopeCore/` | The simulation. **No UE headers, ever.** Compiled by both UE and CMake. |
 | `Source/TautRope/` | The Unreal glue: actors, shape extraction, CVars, debug rendering, the recorder. |
-| `Standalone/` | CMake build for core, the replay CLI and the unit tests. No engine required. |
+| `Headless/` | CMake build for core, the replay CLI and the unit tests. No engine required. |
 
 The split is what makes the loop fast. If a UE header reaches `TautRopeCore`,
 the standalone build breaks — that is the intended alarm, not an inconvenience
@@ -34,7 +34,7 @@ In the editor, with the level running: `tautrope.record 1`, reproduce the bug,
 **2. Verify the replay before trusting anything.**
 
 ```
-cd Plugins/TautRope/Standalone
+cd Plugins/TautRope/Headless
 ./b.bat
 ./build/tautrope-replay <recording> --verify
 ```
@@ -258,7 +258,7 @@ rather than looking green. This exists because a hypothesis in this area once in
 appeared to hang, which cost far more time to diagnose than to detect. Whatever
 else a change improves, if it trips this it is wrong.
 
-**Build with `Standalone/b.bat`, not bare `cmake --build`.** The compiler needs
+**Build with `Headless/b.bat`, not bare `cmake --build`.** The compiler needs
 the MSVC environment, and `vcvars64.bat` costs ~1.5 s of what is otherwise a
 ~0.2 s loop. `b.bat` caches that environment into `msvcenv.txt` on first use
 (gitignored, machine-specific) and configures the build dir if it is missing.
@@ -313,7 +313,7 @@ debug against.
 
 ## Tests
 
-`Standalone/Tests/`. Two kinds:
+`Headless/Tests/`. Two kinds:
 
 - `TEST(Name)` — must pass. A red suite means a regression.
 - Invariants that must never trip, such as
