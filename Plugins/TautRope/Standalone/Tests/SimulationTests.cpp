@@ -1,9 +1,9 @@
 // Simulation behaviour, run against a shape captured from the real level.
 //
-// The two TEST_PENDING cases at the bottom are the defects this whole system was
-// built to chase. They assert the behaviour we want, not the behaviour we have,
-// and are excluded from the pass/fail total so a red suite always means a
-// regression. Promote them to TEST when they hold.
+// Every test here states what it PROVES, then what it FIXES if it closed a
+// debugging loop, or what it GUARDS otherwise, and the sabotage that was seen to
+// turn it red. A test nobody has watched fail asserts nothing, and reading it
+// cannot tell you which kind it is.
 #include "Framework.h"
 #include "Support.h"
 
@@ -14,12 +14,15 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstddef>
 
 using TautRope::Vec3;
 
 namespace
 {
 	constexpr float MaxLength = 1500.f;
+
+	enum class SweepMode { OneWay, ThereAndBack, OverTheTop };
 
 	// Outside the shape on the low-Y side, level with the middle of the box.
 	const Vec3 StartLocation(-463.0, 100.0, 162.0);
@@ -47,10 +50,49 @@ namespace
 		);
 	}
 
+	// Around the shape and back again. The return leg is the point: sweeping one
+	// way only ever adds rope points, and the pruning phase removes a converged
+	// group when the rope unwraps. No unwrap, no slide over a vertex, and both
+	// defect tests below assert against a rope that never did the thing.
+	Vec3 SweptEndThereAndBack(const Vec3& Centre, const int Frame, const int FrameCount)
+	{
+		const int Half = FrameCount / 2;
+		const int Effective = Frame <= Half ? Frame : FrameCount - Frame;
+		return SweptEnd(Centre, Effective, Half);
+	}
+
+	// Over the top of the shape rather than around its waist. The reported defect
+	// happens where the rope wraps a top corner: points converge on the vertex two
+	// silhouette edges and a face diagonal share. A sweep in the horizontal plane
+	// never puts the rope on a top face at all.
+	Vec3 SweptEndOverTheTop(const Vec3& Centre, const double TopZ, const int Frame, const int FrameCount)
+	{
+		const int Half = FrameCount / 2;
+		const int Effective = Frame <= Half ? Frame : FrameCount - Frame;
+		const double Angle = (3.141592653589793 * Effective) / Half;
+		const double Radius = 260.0;
+		// Starts on the same side as StartLocation, so the rope begins as a short
+		// straight line clear of the shape, then is dragged up over the top face and
+		// down the far side. Starting on the far side puts the very first straight
+		// line through the solid, which is a broken fixture rather than a defect:
+		// that arrangement reported 105 units inside on frame 0.
+		return Vec3(
+			Centre.X
+			, Centre.Y - Radius * std::cos(Angle)
+			, TopZ + Radius * std::sin(Angle)
+		);
+	}
+
 	struct SweepResult
 	{
 		double DeepestPenetration = 0.0;
+		double DeepestSegmentInside = 0.0;
+		double FirstFrameSegmentInside = 0.0;
+		int FirstPenetratingFrame = -1;
 		int MaxPointCount = 0;
+		int MinPointCount = 1 << 30;
+		int RemovalFrames = 0;
+		int PointsRemoved = 0;
 		int CollisionIterationCapHits = 0;
 		int MostCollisionIterations = 0;
 		int RemoveSweepIterationCapHits = 0;
@@ -58,34 +100,75 @@ namespace
 		std::vector<TautRope::Point> FinalPoints;
 	};
 
-	SweepResult SweepAroundShape(const int FrameCount)
+	SweepResult RunSweep(const int FrameCount, const SweepMode Mode)
 	{
 		const TautRope::CollisionShape Shape = TautRopeTest::MakeCapturedBoxShape();
 		const Vec3 Centre = ShapeCentre(Shape);
+		const double TopZ = TautRopeTest::ShapeBounds(Shape).Max.Z;
 
 		TautRope::Rope Rope;
 		Rope.AppendToNearbyShapes({ Shape });
 
 		SweepResult Result;
+		int PreviousCount = 0;
 		for (int Frame = 0; Frame < FrameCount; ++Frame)
 		{
-			Rope.UpdateRope(StartLocation, SweptEnd(Centre, Frame, FrameCount), MaxLength);
+			const Vec3 End = Mode == SweepMode::OverTheTop
+				? SweptEndOverTheTop(Centre, TopZ, Frame, FrameCount)
+				: (Mode == SweepMode::ThereAndBack
+					? SweptEndThereAndBack(Centre, Frame, FrameCount)
+					: SweptEnd(Centre, Frame, FrameCount));
+			Rope.UpdateRope(StartLocation, End, MaxLength);
 
 			const double Depth = TautRopeTest::DeepestPenetration(Rope.GetPoints(), Shape);
 			if (Depth > Result.DeepestPenetration) { Result.DeepestPenetration = Depth; }
 
+			const double Inside = TautRopeTest::DeepestSegmentInside(Rope.GetPoints(), Shape);
+			if (Inside > Result.DeepestSegmentInside) { Result.DeepestSegmentInside = Inside; }
+			if (Frame == 0) { Result.FirstFrameSegmentInside = Inside; }
+			if (Inside > 1.0 && Result.FirstPenetratingFrame < 0) { Result.FirstPenetratingFrame = Frame; }
+
 			const int Count = static_cast<int>(Rope.GetPoints().size());
 			if (Count > Result.MaxPointCount) { Result.MaxPointCount = Count; }
+			if (Count < Result.MinPointCount) { Result.MinPointCount = Count; }
+
+			// A drop in the point count is the pruning phase removing a converged
+			// group, i.e. the rope sliding over a vertex. That is the event both
+			// defects need, so the fixture has to be seen producing it.
+			if (PreviousCount > 0 && Count < PreviousCount)
+			{
+				++Result.RemovalFrames;
+				Result.PointsRemoved += PreviousCount - Count;
+			}
+			PreviousCount = Count;
 		}
 		Result.FinalPoints = Rope.GetPoints();
+
 		Result.CollisionIterationCapHits = Rope.CollisionIterationCapHits;
 		Result.MostCollisionIterations = Rope.MostCollisionIterations;
 		Result.RemoveSweepIterationCapHits = Rope.RemoveSweepIterationCapHits;
 		Result.MostRemoveSweepIterations = Rope.MostRemoveSweepIterations;
 		return Result;
 	}
+
+	SweepResult SweepAroundShape(const int FrameCount)
+	{
+		return RunSweep(FrameCount, SweepMode::OneWay);
+	}
+
+	SweepResult SweepAroundShapeAndBack(const int FrameCount)
+	{
+		return RunSweep(FrameCount, SweepMode::ThereAndBack);
+	}
+
+	SweepResult SweepOverTheTop(const int FrameCount)
+	{
+		return RunSweep(FrameCount, SweepMode::OverTheTop);
+	}
 }
 
+// PROVES: the first update seeds exactly the two endpoints.
+// GUARDS: the starting state every other simulation test builds on.
 TEST(Simulation_SeedsTwoPointsOnFirstUpdate)
 {
 	TautRope::Rope Rope;
@@ -95,6 +178,12 @@ TEST(Simulation_SeedsTwoPointsOnFirstUpdate)
 	CHECK_EQ(Rope.GetPoints()[1].Id, 1);
 }
 
+// PROVES: the same inputs replayed twice produce bit-identical output.
+// GUARDS: the premise of the entire headless loop. If this fails, no measurement
+// taken from a replay says anything about the editor.
+// NOT YET SABOTAGE-PROVEN: perturbing an input changes both runs equally, so they
+// still agree. Only genuine run-to-run variance, which nothing here introduces,
+// would redden it.
 TEST(Simulation_IsDeterministic)
 {
 	// Two ropes, identical inputs, compared bitwise through the same routine the
@@ -133,6 +222,9 @@ TEST(Simulation_IsDeterministic)
 	}
 }
 
+// PROVES: the sweep actually makes the rope gain intermediate points.
+// GUARDS: every test below from asserting against a straight line that never
+// touched the shape.
 TEST(Simulation_WrapsShapeWhenEndIsSweptAround)
 {
 	// If the rope never gains an intermediate point, the collision and pruning
@@ -145,12 +237,14 @@ TEST(Simulation_WrapsShapeWhenEndIsSweptAround)
 	}
 }
 
-// Both iteration ceilings are backstops against point counts exploding until the
-// simulation freezes and runs out of memory, not budgets the solver is meant to
-// spend. Reaching either means the loop never settled, so this is a hard
-// invariant: any hypothesis that trips it is wrong, however good its other
-// numbers look. SweepRemovePoint had no ceiling at all until this was added, so
-// a non-converging removal there could only present as a hang.
+
+// PROVES: neither the collision loop nor the remove sweep ever reaches its
+// ceiling, and the rope never reaches the point ceiling.
+// GUARDS: runaway insertion. The ceilings exist only to stop point counts
+// exploding until the simulation freezes and runs out of memory, so touching one
+// is a bug and never a heavy frame. Sabotage: make the straightening step
+// overshoot its target and this goes red with 13 collision and 322 remove-sweep
+// frames at the cap.
 TEST(Simulation_NeverExhaustsCollisionIterations)
 {
 	const SweepResult Result = SweepAroundShape(360);
@@ -178,6 +272,11 @@ TEST(Simulation_NeverExhaustsCollisionIterations)
 	}
 }
 
+// PROVES: the rope never exceeds MaxLength.
+// GUARDS: the length budget in the movement phase.
+// NOT YET SABOTAGE-PROVEN: MaxLength is 1500 and this fixture never gets near it,
+// so even letting the endpoint overshoot threefold leaves the test green. It
+// needs a fixture that pulls the rope taut before it asserts anything.
 TEST(Simulation_RopeStaysWithinMaxLength)
 {
 	const SweepResult Result = SweepAroundShape(360);
@@ -189,34 +288,77 @@ TEST(Simulation_RopeStaysWithinMaxLength)
 	}
 }
 
-// --------------------------------------------------------------------------
-// Known defects. See the note at the top of this file.
-// --------------------------------------------------------------------------
 
-TEST_PENDING(Defect_RopeNeverPenetratesShape)
+// PROVES: no part of the rope ever lies inside a shape -- the LINE between two
+// points, not just the points themselves.
+// GUARDS: collision integrity. Sabotage: make GetTriangleLineIntersection return
+// false and this goes red, clean on frame 0 then 113.707 units of rope through
+// the box by frame 270.
+//
+// The measurement is segment-based on purpose. This test spent weeks green while
+// checking POINT penetration, which the defect never produces: both endpoints
+// rest on the surface and the segment between them cuts through. It also swept
+// only around the shape's waist, never over a top face, so the rope was never on
+// the geometry where the reported defect happens.
+//
+// It does NOT guard the tied-edge fix. Reverting that fix leaves this green on
+// all three motions, so the synthetic fixture still does not reproduce the
+// penetration seen in recording 192009. Until it does, that fix is covered only
+// by the recordings.
+TEST(Simulation_RopeNeverPassesThroughAShape)
 {
-	// "the rope also at times will intersect shapes after it has slid over a
-	// vertex". A rope point should never end up inside a shape. Tolerance is one
-	// unit, comfortably above the simulation's own 0.01 distance tolerance, so
-	// only real penetration trips it.
-	const SweepResult Result = SweepAroundShape(360);
-	CHECK(Result.DeepestPenetration < 1.0);
-	std::printf("      deepest penetration over the sweep: %.6f units\n", Result.DeepestPenetration);
+	const SweepResult Around = SweepAroundShapeAndBack(720);
+	const SweepResult OverTop = SweepOverTheTop(720);
+
+	// A fixture that starts inside the shape proves nothing about sliding over
+	// anything. The first arrangement of the over-the-top sweep began with the
+	// straight rope through the box, reporting 105 units inside on frame 0.
+	CHECK(Around.FirstFrameSegmentInside < 1.0);
+	CHECK(OverTop.FirstFrameSegmentInside < 1.0);
+
+	CHECK(Around.DeepestSegmentInside < 1.0);
+	CHECK(OverTop.DeepestSegmentInside < 1.0);
+	std::printf("      deepest rope line inside: %.6f around, %.6f over the top\n",
+		Around.DeepestSegmentInside, OverTop.DeepestSegmentInside);
 }
 
-TEST_PENDING(Defect_RopeSettlesWhenInputsStopMoving)
+// PROVES: the fixture reaches the state both defects need -- the rope wraps, and
+// the pruning phase later removes a converged group, which is the rope sliding
+// over a vertex.
+// GUARDS: the tests above from going quietly vacuous. Before the return leg was
+// added the sweep only ever accumulated points, removed none, and every defect
+// assertion held against a rope that had never slid over anything. Sabotage: drop
+// the return leg from SweptEndThereAndBack and the removal count goes to zero.
+TEST(Simulation_FixtureActuallySlidesOverAVertex)
 {
-	// "the rope slows down as two or more points converge on edges towards the
-	// same vertex". Held still, the rope should reach a resting configuration and
-	// stop changing. If points converging on a vertex crawl instead of resolving,
-	// the length keeps creeping long after the endpoints stopped.
+	const SweepResult Around = SweepAroundShapeAndBack(720);
+	const SweepResult OverTop = SweepOverTheTop(720);
+	std::printf("      removals: %d frames / %d points around, %d frames / %d points over the top\n",
+		Around.RemovalFrames, Around.PointsRemoved, OverTop.RemovalFrames, OverTop.PointsRemoved);
+	CHECK(Around.MaxPointCount > 2);
+	CHECK(Around.RemovalFrames > 0);
+	CHECK(OverTop.RemovalFrames > 0);
+}
+
+// PROVES: held still, the rope reaches a resting configuration within a bounded
+// number of frames.
+// GUARDS: convergence progress. Sabotage: perturb an intermediate target by a
+// constant each frame in MovementPhase and the rope never settles, so this goes
+// red at the cap.
+//
+// It measures frames-to-settle from the moment the input stops, not drift after
+// a warmup. The previous version held 200 frames and only then measured 100 more,
+// so it could only ever observe an already-settled rope -- no sabotage reached
+// it, including breaking the iteration cap and letting the movement phase
+// overshoot.
+TEST(Simulation_RopeSettlesWhenInputsStopMoving)
+{
 	const TautRope::CollisionShape Shape = TautRopeTest::MakeCapturedBoxShape();
 	const Vec3 Centre = ShapeCentre(Shape);
 
 	TautRope::Rope Rope;
 	Rope.AppendToNearbyShapes({ Shape });
 
-	// Wrap the shape first, then hold everything still.
 	constexpr int SweepFrames = 200;
 	for (int Frame = 0; Frame < SweepFrames; ++Frame)
 	{
@@ -224,23 +366,38 @@ TEST_PENDING(Defect_RopeSettlesWhenInputsStopMoving)
 	}
 
 	const Vec3 HeldEnd = SweptEnd(Centre, SweepFrames, SweepFrames * 2);
-	for (int Frame = 0; Frame < 200; ++Frame)
+	constexpr int SettleCap = 240;
+	// A rope that is not settling usually grows points as well, and the iteration
+	// ceilings bound work within a frame, not growth across frames. Without this
+	// the test does not fail, it grinds: one sabotage run took over nine minutes
+	// without finishing 240 frames. Fail fast instead.
+	constexpr std::size_t PointCeiling = 64;
+	std::size_t WorstPointCount = Rope.GetPoints().size();
+	double Previous = TautRopeTest::RopeLength(Rope.GetPoints());
+	int FramesToSettle = -1;
+	int Quiet = 0;
+	for (int Frame = 0; Frame < SettleCap; ++Frame)
 	{
 		Rope.UpdateRope(StartLocation, HeldEnd, MaxLength);
+		WorstPointCount = Rope.GetPoints().size() > WorstPointCount ? Rope.GetPoints().size() : WorstPointCount;
+		if (WorstPointCount > PointCeiling)
+		{
+			break;
+		}
+		const double Length = TautRopeTest::RopeLength(Rope.GetPoints());
+		// Ten consecutive frames that move the rope less than a hundredth of the
+		// simulation's own distance tolerance count as settled.
+		Quiet = std::fabs(Length - Previous) < 1.0e-4 ? Quiet + 1 : 0;
+		Previous = Length;
+		if (Quiet >= 10)
+		{
+			FramesToSettle = Frame + 1;
+			break;
+		}
 	}
 
-	const double LengthBefore = TautRopeTest::RopeLength(Rope.GetPoints());
-	const std::size_t CountBefore = Rope.GetPoints().size();
-
-	for (int Frame = 0; Frame < 100; ++Frame)
-	{
-		Rope.UpdateRope(StartLocation, HeldEnd, MaxLength);
-	}
-
-	const double LengthAfter = TautRopeTest::RopeLength(Rope.GetPoints());
-	const double Drift = std::fabs(LengthAfter - LengthBefore);
-
-	std::printf("      length drift over 100 static frames: %.9f units (%zu -> %zu points)\n",
-		Drift, CountBefore, Rope.GetPoints().size());
-	CHECK(Drift < 0.01);
+	std::printf("      settled after %d frames (cap %d), %zu points, peak %zu\n",
+		FramesToSettle, SettleCap, Rope.GetPoints().size(), WorstPointCount);
+	CHECK(WorstPointCount <= PointCeiling);
+	CHECK(FramesToSettle > 0);
 }

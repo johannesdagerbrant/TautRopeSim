@@ -99,6 +99,10 @@ namespace
 	const char* TempPath() { return "tautrope_test_recording.tautrope"; }
 }
 
+// PROVES: a recording written and read back is bit-identical, awkward values and
+// all.
+// GUARDS: %.17g / %.9g. Sabotage: write doubles at %.15g and this goes red. The
+// replay loop is worthless if the file cannot carry the state exactly.
 TEST(Recording_RoundTripsBitIdentically)
 {
 	const TautRope::Recording Written = MakeAwkwardRecording();
@@ -124,6 +128,11 @@ TEST(Recording_RoundTripsBitIdentically)
 	std::remove(TempPath());
 }
 
+// PROVES: nextpointid survives a round trip independently of the ids in use.
+// FIXES: replayed point ids diverging from the editor's. The allocator had been
+// reconstructed as max(id)+1, which is wrong whenever ids went to points pruned
+// before the recording started. Sabotage: write 0 for nextpointid and this goes
+// red.
 TEST(Recording_PreservesNextPointIdSeparatelyFromPointIds)
 {
 	// The allocator cannot be inferred from the surviving points: ids belonging
@@ -142,6 +151,10 @@ TEST(Recording_PreservesNextPointIdSeparatelyFromPointIds)
 	std::remove(TempPath());
 }
 
+// PROVES: a recording from a different format version is refused, not guessed at.
+// GUARDS: silent misreads. Sabotage: drop the version equality check and this
+// goes red. A v1 file parsed as v2 replays with different ids and looks like a
+// simulation bug.
 TEST(Recording_RejectsUnknownFormatVersion)
 {
 	std::FILE* File = std::fopen(TempPath(), "wb");
@@ -162,6 +175,11 @@ TEST(Recording_RejectsUnknownFormatVersion)
 	std::remove(TempPath());
 }
 
+// PROVES: verification catches a one-bit difference in a single coordinate, and
+// reports the frame, point, phase and field.
+// GUARDS: the whole loop's foundation -- a comparison that tolerates small
+// differences would report PASS on a replay that had already drifted. Sabotage:
+// make SameBits(double) return true and this goes red.
 TEST(Compare_DetectsSingleBitDifferenceInOneCoordinate)
 {
 	const TautRope::Recording A = MakeAwkwardRecording();
@@ -183,6 +201,9 @@ TEST(Compare_DetectsSingleBitDifferenceInOneCoordinate)
 	CHECK_EQ(Divergence.DivergentFrameCount, 1);
 }
 
+// PROVES: identity is compared, not just position. Two points in the same place
+// with different ids are a divergence.
+// GUARDS: id drift, which is how the nextpointid bug first showed itself.
 TEST(Compare_DetectsPointIdDifference)
 {
 	const TautRope::Recording A = MakeAwkwardRecording();
@@ -194,6 +215,10 @@ TEST(Compare_DetectsPointIdDifference)
 	CHECK_STR_EQ(Divergence.Field, "id");
 }
 
+// PROVES: verification does not cry wolf on a genuinely identical pair.
+// GUARDS: the other direction of the same comparison. A checker that always
+// reported divergence would be just as useless, and every PASS in this repo is
+// evidence only if this holds.
 TEST(Compare_AcceptsIdenticalRecordings)
 {
 	const TautRope::Recording A = MakeAwkwardRecording();

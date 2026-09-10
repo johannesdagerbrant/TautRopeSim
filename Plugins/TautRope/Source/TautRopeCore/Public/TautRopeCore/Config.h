@@ -17,6 +17,13 @@ namespace TautRope
 	// runs out. Reaching either ceiling is a bug, never a heavy frame.
 	inline constexpr int32 MaxRemoveSweepIterations = 100;
 
+	// Hard ceiling on rope points. The iteration ceilings bound work within a
+	// single frame; they do nothing about a rope that grows a little every frame
+	// until it freezes the simulation and exhausts memory, which is the failure
+	// this is here to stop. Real captures peak around 50 points, so reaching this
+	// is a bug, never a heavy scene.
+	inline constexpr int32 MaxRopePoints = 512;
+
 	// Two edges are reached by the same sweep at the same moment when the sweep
 	// crosses the vertex they share. Which one has the marginally smaller ratio
 	// is arbitrary, so both are reported rather than one being discarded.

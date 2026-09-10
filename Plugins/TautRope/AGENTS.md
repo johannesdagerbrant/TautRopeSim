@@ -69,9 +69,28 @@ benchmarks matter more than bit-identity at this stage.
 why it solved the problem. The human verifies in the editor. If the bug still
 reproduces, they return to step 1 with a new recording and new observations.
 
-**7. Harden, then delete.** Add a unit test that pinpoints the exact defect,
-and delete the recordings used for debugging. Recordings are large and slow to
-accumulate; the tests are the permanent record.
+**7. Harden, then delete.** Add a unit test that pinpoints the exact defect, and
+delete the recordings used for debugging. Recordings are large and slow to
+accumulate; the tests are the permanent record. Three rules, no exceptions:
+
+**Every test states what it PROVES, in one or two lines.** Then either what it
+FIXES, naming the defect and the observation it came from, if it was written at
+the end of a debugging loop like this one -- or what it GUARDS, naming the
+assumption that would silently break, if it was written for any other reason. A
+test whose comment cannot answer one of those is a test nobody can maintain.
+
+**Every test must be sabotaged and seen red before it counts.** Break the thing
+it claims to protect, run it, watch it fail, put the code back. A test that stays
+green under sabotage asserts nothing, and there is no way to tell that by reading
+it. Two examples from this repo, both of which read perfectly well:
+`Defect_RopeNeverPenetratesShape` measured *point* penetration when the defect
+puts no point inside a shape at all -- it is the segment between two surface
+points that cuts through -- and both defect tests passed for weeks on a fixture
+whose motion never triggered either defect.
+
+**A test that reproduces nothing is worse than a missing test**, because it
+reports success. If the motion in the fixture does not trigger the defect, the
+fixture is the work, not the assertion.
 
 ---
 

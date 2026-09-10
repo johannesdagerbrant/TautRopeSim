@@ -1,5 +1,6 @@
 #pragma once
 
+#include "TautRopeCore/Analysis.h"
 #include "TautRopeCore/CollisionShape.h"
 #include "TautRopeCore/Math.h"
 #include "TautRopeCore/Point.h"
@@ -110,28 +111,42 @@ namespace TautRopeTest
 
 	// How far inside the shape a point sits, 0 when outside. The captured shape is
 	// axis aligned, so its bounding box is the shape.
-	inline double PenetrationDepth(const Vec3& P, const Bounds& B)
+	// Penetration comes from core, not from a bounds test written here. An
+	// axis-aligned box approximation of the hull would quietly disagree with the
+	// simulation about where the surface is, and mirroring production geometry in
+	// a test is how measurements end up describing something else.
+	inline const TautRope::ShapePlanes& PlanesFor(const TautRope::CollisionShape& Shape)
 	{
-		const double DX = (P.X < B.Min.X || P.X > B.Max.X) ? 0.0 : (P.X - B.Min.X < B.Max.X - P.X ? P.X - B.Min.X : B.Max.X - P.X);
-		const double DY = (P.Y < B.Min.Y || P.Y > B.Max.Y) ? 0.0 : (P.Y - B.Min.Y < B.Max.Y - P.Y ? P.Y - B.Min.Y : B.Max.Y - P.Y);
-		const double DZ = (P.Z < B.Min.Z || P.Z > B.Max.Z) ? 0.0 : (P.Z - B.Min.Z < B.Max.Z - P.Z ? P.Z - B.Min.Z : B.Max.Z - P.Z);
-		if (DX <= 0.0 || DY <= 0.0 || DZ <= 0.0)
-		{
-			return 0.0;
-		}
-		return DX < DY ? (DX < DZ ? DX : DZ) : (DY < DZ ? DY : DZ);
+		static TautRope::ShapePlanes Planes = TautRope::FindShapePlanes(Shape);
+		return Planes;
 	}
 
+	// Deepest any single rope POINT sits inside the shape.
 	inline double DeepestPenetration(const std::vector<TautRope::Point>& Points, const TautRope::CollisionShape& Shape)
 	{
-		const Bounds B = ShapeBounds(Shape);
+		const TautRope::ShapePlanes& Planes = PlanesFor(Shape);
 		double Deepest = 0.0;
 		for (const TautRope::Point& P : Points)
 		{
-			const double Depth = PenetrationDepth(P.Location, B);
+			const double Depth = TautRope::PointPenetrationDepth(Planes, P.Location);
 			if (Depth > Deepest) { Deepest = Depth; }
 		}
 		return Deepest;
+	}
+
+	// Longest run of rope LINE inside the shape. This is the one that matters: the
+	// defect leaves both endpoints resting on the surface and drives the segment
+	// between them through the solid, so a point-only check cannot see it.
+	inline double DeepestSegmentInside(const std::vector<TautRope::Point>& Points, const TautRope::CollisionShape& Shape)
+	{
+		const TautRope::ShapePlanes& Planes = PlanesFor(Shape);
+		double Worst = 0.0;
+		for (std::size_t i = 0; i + 1 < Points.size(); ++i)
+		{
+			const double Inside = TautRope::SegmentInsideLength(Planes, Points[i].Location, Points[i + 1].Location);
+			if (Inside > Worst) { Worst = Inside; }
+		}
+		return Worst;
 	}
 
 	inline double RopeLength(const std::vector<TautRope::Point>& Points)

@@ -272,6 +272,18 @@ namespace TautRope
 			}
 			bIsAnyNewCollision = !SegmentSweepHits.empty();
 			CollisionItr++;
+
+			if (Num(RopePoints) > MostRopePoints)
+			{
+				MostRopePoints = Num(RopePoints);
+			}
+			if (Num(RopePoints) >= MaxRopePoints)
+			{
+				// Stop rather than grind. Without this a runaway does not fail, it
+				// makes each frame slower than the last until the process looks hung.
+				++RopePointCeilingHits;
+				break;
+			}
 		}
 
 		if (CollisionItr > MostCollisionIterations)

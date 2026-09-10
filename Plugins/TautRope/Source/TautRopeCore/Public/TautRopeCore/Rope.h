@@ -53,6 +53,10 @@ namespace TautRope
 		int32 RemoveSweepIterationCapHits = 0;
 		int32 MostRemoveSweepIterations = 0;
 
+		// Frames that hit MaxRopePoints, and the largest the rope ever got.
+		int32 RopePointCeilingHits = 0;
+		int32 MostRopePoints = 0;
+
 	private:
 		std::vector<Vec3> MovementPhase(
 			const Vec3& StartLocation
