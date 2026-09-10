@@ -63,21 +63,27 @@ TEST(VertexCone_DoesNotGroupPointsFromDifferentShapes)
 {
 	const std::vector<TautRope::CollisionShape> Shapes = { MakeConeShape(), MakeDistantShape() };
 
+	// A foreign point on EACH side of the vertex point. The group is expanded by
+	// two separate loops, one walking back and one walking forward, and each needs
+	// its own shape check. Removing the check from only the backward loop left the
+	// earlier version of this test green while the bug was still there.
 	const std::vector<TautRope::Point> RopePoints = {
 		MakePoint(Vec3(0.0, -1.0, 0.0), -1, -1, -1, 0)      // free end
-		, MakePoint(Vec3(0.0, 0.0, 0.0), 0, 0, 0, 1)        // on shape 0, at vertex 0
-		, MakePoint(Vec3(100.5, 0.0, 0.0), 1, 0, -1, 2)     // on shape 1, edge 0
+		, MakePoint(Vec3(99.5, 0.0, 0.0), 1, 0, -1, 1)      // on shape 1, before
+		, MakePoint(Vec3(0.0, 0.0, 0.0), 0, 0, 0, 2)        // on shape 0, at vertex 0
+		, MakePoint(Vec3(100.5, 0.0, 0.0), 1, 0, -1, 3)     // on shape 1, after
 	};
 
 	const std::vector<bool> ToRemove = TautRope::GetAdjacentPointsOnSameVertexCone(RopePoints, Shapes);
 
-	std::printf("      remove flags: %d %d %d\n",
-		ToRemove[0] ? 1 : 0, ToRemove[1] ? 1 : 0, ToRemove[2] ? 1 : 0);
+	std::printf("      remove flags: %d %d %d %d\n",
+		ToRemove[0] ? 1 : 0, ToRemove[1] ? 1 : 0, ToRemove[2] ? 1 : 0, ToRemove[3] ? 1 : 0);
 
 	// The vertex point itself is in a cone and may go.
-	CHECK(ToRemove[1]);
+	CHECK(ToRemove[2]);
 
-	// The point on the other shape is a hundred units away and has nothing to do
-	// with that cone.
-	CHECK(!ToRemove[2]);
+	// Neither point on the other shape has anything to do with that cone; they are
+	// a hundred units away and share only the numbers used to index them.
+	CHECK(!ToRemove[1]);
+	CHECK(!ToRemove[3]);
 }
