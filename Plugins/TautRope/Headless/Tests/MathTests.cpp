@@ -8,6 +8,19 @@
 using TautRope::Quat;
 using TautRope::Vec3;
 
+// These do not test a maths library we wanted to write. Core carries its own
+// Vec3/Quat/Math because UE's cannot compile without the engine: Math/Vector.h
+// needs about a dozen UBT defines and then the Windows HAL, PlatformMemory,
+// PlatformString and strsafe.h, and Core has to be linked and GMalloc started.
+// That would cost the headless loop, which is the only reason any of this is
+// fast.
+//
+// The same code therefore runs in the editor and in the replay tool, which is
+// what makes bit-identity structural rather than hopeful. What these tests pin
+// is the other half: that the behaviour being replicated is UE's, down to
+// operation order and branch order. They are a contract with the engine, not
+// coverage of our own arithmetic.
+
 // PROVES: a vector already of unit length comes back bit-identical.
 // GUARDS: the SquareSum == 1.0 early-out, which the engine has and which keeps
 // an already-normalised vector from being multiplied by a rounded 1.0.

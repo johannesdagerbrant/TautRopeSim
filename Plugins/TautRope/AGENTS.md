@@ -92,6 +92,25 @@ whose motion never triggered either defect.
 reports success. If the motion in the fixture does not trigger the defect, the
 fixture is the work, not the assertion.
 
+**A test proves the mechanism, or the session is not over.** The test must build
+production types directly, from the smallest data that shows the effect, and call
+production functions. If that cannot be done, the mechanism is not understood
+yet: go back to the recordings. A test that needs a captured fixture, a frame
+loop, or a wrapped-rope warm-up to make a defect appear is evidence that what was
+found is a symptom rather than a cause.
+
+The tie defect is the worked example. It was first "tested" by sweeping a
+captured box shape for 360 frames and measuring penetration, which reproduced
+nothing. The mechanism needed three vertices, two edges sharing one, one sweep
+triangle containing that vertex, and one call to
+`SweepSegmentTriangleAgainstShape` -- see `Sweep_ReportsBothEdgesReachedAtTheSameInstant`.
+Everything else was scaffolding standing in for understanding.
+
+**Delete the recording when its test is proven and the human has approved the
+change in PIE.** Not before: an unproven fix has no other evidence. Not later
+either -- recordings are tens of megabytes each, and a directory of them is a
+sign that debugging sessions are being left open.
+
 ---
 
 ## Commands
@@ -265,6 +284,13 @@ the MSVC environment, and `vcvars64.bat` costs ~1.5 s of what is otherwise a
 Calling `cmake --build build` from a shell without the environment fails with
 `cannot open include file: 'cstdint'` -- and if you then run the test binary
 anyway, you are testing the *previous* build. Check the build succeeded.
+
+**A sabotage harness must fail loudly on a failed build.** Ours did not, and
+after `Standalone/` became `Headless/` it silently kept invoking the old path,
+built nothing, and ran the previous binary. Two sabotages were reported as
+"survived" when the sabotaged code had never been compiled. This is the same
+stale-binary trap as building without the MSVC environment, and it is worse here
+because the wrong answer is the reassuring one.
 
 **`DeltaTime` is not a simulation input.** `UpdateRope(Start, End, MaxLength)`
 does not take it. State carries frame to frame through the rope points.
