@@ -377,6 +377,7 @@ int main(int argc, char** argv)
 	const char* OutputPath = nullptr;
 	bool bInfoOnly = false;
 	bool bVerify = false;
+	bool bStripInFaceEdges = false;
 	const char* Analyse = nullptr;
 
 	for (int Index = 1; Index < argc; ++Index)
@@ -385,6 +386,10 @@ int main(int argc, char** argv)
 		if (std::strcmp(Arg, "--info") == 0)
 		{
 			bInfoOnly = true;
+		}
+		else if (std::strcmp(Arg, "--no-in-face-edges") == 0)
+		{
+			bStripInFaceEdges = true;
 		}
 		else if (std::strcmp(Arg, "--verify") == 0)
 		{
@@ -465,12 +470,35 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
+	// Kept so the result can be written out with the real geometry. The planes
+	// the penetration measurement needs are recovered FROM the in-face edges, so
+	// analysing a stripped shape reports no shapes and therefore no penetration,
+	// which reads exactly like a fix and is nothing of the kind.
+	const std::vector<TautRope::CollisionShape> OriginalShapes = Input.Shapes;
+
+	if (bStripInFaceEdges)
+	{
+		int Before = 0;
+		int After = 0;
+		for (TautRope::CollisionShape& Shape : Input.Shapes)
+		{
+			Before += static_cast<int>(Shape.Edges.size());
+			Shape = TautRope::WithoutInFaceEdges(Shape);
+			After += static_cast<int>(Shape.Edges.size());
+		}
+		std::printf("\n  stripped in-face edges: %d -> %d\n", Before, After);
+	}
+
 	double Seconds = 0.0;
 	int CapHits = 0;
 	int MostIterations = 0;
 	int RemoveCapHits = 0;
 	int MostRemoveSweep = 0;
-	const TautRope::Recording Result = Replay(Input, Seconds, CapHits, MostIterations, RemoveCapHits, MostRemoveSweep);
+	TautRope::Recording Result = Replay(Input, Seconds, CapHits, MostIterations, RemoveCapHits, MostRemoveSweep);
+	if (bStripInFaceEdges)
+	{
+		Result.Shapes = OriginalShapes;
+	}
 
 	std::printf("\n");
 	PrintSummary(Result, "replayed");

@@ -89,6 +89,53 @@ namespace TautRope
 	// crossing deeper than the tolerance counts.
 	static constexpr double SurfaceTolerance = 0.05;
 
+
+	CollisionShape WithoutInFaceEdges(const CollisionShape& Shape)
+	{
+		const ShapePlanes Planes = FindShapePlanes(Shape);
+
+		std::vector<bool> Drop(static_cast<std::size_t>(Num(Shape.Edges)), false);
+		for (const int32 EdgeIndex : Planes.InFaceEdges)
+		{
+			Drop[static_cast<std::size_t>(EdgeIndex)] = true;
+		}
+
+		CollisionShape Result;
+		Result.Vertices = Shape.Vertices;
+
+		std::vector<int32> Remap(static_cast<std::size_t>(Num(Shape.Edges)), IndexNone);
+		for (int32 e = 0; e < Num(Shape.Edges); ++e)
+		{
+			if (Drop[static_cast<std::size_t>(e)])
+			{
+				continue;
+			}
+			Remap[static_cast<std::size_t>(e)] = Num(Result.Edges);
+			Result.Edges.push_back(Shape.Edges[e]);
+			Result.EdgeRotations.push_back(Shape.EdgeRotations[e]);
+		}
+
+		Result.VertToEdges.resize(Shape.VertToEdges.size());
+		for (std::size_t v = 0; v < Shape.VertToEdges.size(); ++v)
+		{
+			for (const int32 e : Shape.VertToEdges[v])
+			{
+				if (e >= 0 && e < Num(Remap) && Remap[static_cast<std::size_t>(e)] != IndexNone)
+				{
+					Result.VertToEdges[v].push_back(Remap[static_cast<std::size_t>(e)]);
+				}
+			}
+		}
+
+		// A vertex is a corner when more than one edge still meets there.
+		Result.IsCornerVertexList.resize(Shape.IsCornerVertexList.size(), false);
+		for (std::size_t v = 0; v < Result.VertToEdges.size(); ++v)
+		{
+			Result.IsCornerVertexList[v] = Result.VertToEdges[v].size() > 1;
+		}
+
+		return Result;
+	}
 	double PointPenetrationDepth(const ShapePlanes& Planes, const Vec3& Point)
 	{
 		if (!Planes.IsUsable())

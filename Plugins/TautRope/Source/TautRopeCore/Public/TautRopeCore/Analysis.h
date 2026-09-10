@@ -38,6 +38,14 @@ namespace TautRope
 
 	TAUTROPE_CORE_API ShapePlanes FindShapePlanes(const CollisionShape& Shape, double Tolerance = 0.05);
 
+	// The same shape with its in-face edges removed. A triangulation diagonal
+	// lying flat across a face has nothing to wrap: both adjacent triangles are
+	// coplanar, so a rope point sitting on one is in the middle of a flat surface
+	// and the line to its neighbour can pass through the solid. Offering those
+	// edges to the simulation at all is the mistake; this is how to measure what
+	// happens without them before changing the shape builder.
+	TAUTROPE_CORE_API CollisionShape WithoutInFaceEdges(const CollisionShape& Shape);
+
 	// How far inside the hull the point sits; 0 when outside.
 	TAUTROPE_CORE_API double PointPenetrationDepth(const ShapePlanes& Planes, const Vec3& Point);
 

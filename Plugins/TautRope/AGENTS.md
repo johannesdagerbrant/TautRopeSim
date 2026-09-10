@@ -111,6 +111,44 @@ change in PIE.** Not before: an unproven fix has no other evidence. Not later
 either -- recordings are tens of megabytes each, and a directory of them is a
 sign that debugging sessions are being left open.
 
+**Fix by subtraction. Make the code stop doing the wrong thing.** Iterating a
+decision until it converges, widening a tolerance, adding a retry or a ceiling or
+a fallback -- these manage the consequences of a wrong decision instead of not
+making it. They also hide the defect, because the symptom improves. Prefer the
+change that deletes the incorrect behaviour, even when it is larger.
+
+Two worked examples, both rejected experiments:
+
+Rope::PruningPhase decides every removal in one pass, judging each point against
+neighbours that are themselves being removed in the same pass. That staleness is
+real and isolated in `Pruning_WrapVerdictDependsOnWhichNeighbourSurvives`. Making
+the verdict iterative -- re-deciding until stable -- cut the frames affected on
+recording 105002 from 829 to 9, and was still the wrong fix: the peak got worse
+(138 to 260 units) and a previously clean recording gained two penetrating
+frames. Converging on a wrong verdict faster is not correctness.
+
+An in-face edge is a triangulation diagonal lying flat across a face, and a rope
+point on one sits in the middle of a flat surface where there is nothing to wrap.
+Deleting those edges outright is the subtractive fix, and on 105002 it works:
+frames affected 829 to 6, worst rope line 138.3 to 3.6, points 2..49 to 2..27,
+the remove sweep never firing at all, replay twice as fast. On 191942 the same
+change is catastrophic -- 74 frames to 1848 -- and `--analyse onsets` says why:
+blamed on collision, with zero insertions.
+
+That is the actual root. **Contact detection is edge-only; there are no faces.**
+So a diagonal is doing two incompatible jobs: it is the only collision feature
+covering a face's interior, and it is also offered to the rope as a wrap anchor.
+The first is load-bearing, the second is wrong. Until the sweep can test a face,
+deleting diagonals removes real collision coverage, and keeping them feeds the
+pruning phase points it cannot handle. Neither half can be fixed alone.
+
+`--no-in-face-edges` on the replay tool exists to keep measuring this. Note that
+it strips edges for the simulation but writes the original shapes into the
+output, because `FindShapePlanes` recovers face planes FROM the in-face edges: a
+stripped shape analyses as having no shapes and therefore no penetration, which
+reads exactly like a fix. The tool warns when it cannot trust its own geometry;
+believe the warning.
+
 ---
 
 ## Commands
@@ -118,6 +156,8 @@ sign that debugging sessions are being left open.
 ```
 tautrope-replay <recording>              replay, report what it produced
 tautrope-replay <recording> --verify     compare against the captured output
+tautrope-replay <recording> --no-in-face-edges
+                                         experiment: simulate without face diagonals
 tautrope-replay <recording> -o <path>    write the replay result out
 tautrope-replay --info <recording>       summarise without replaying
 tautrope-replay <recording> --analyse <what>
