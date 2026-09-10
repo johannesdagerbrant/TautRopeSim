@@ -150,6 +150,12 @@ namespace TautRope
 		int32 PointsBefore = 0;
 		int32 PointsRemoved = 0;
 
+		// Points the pruning phase ADDED, which it does via SweepRemovePoint when a
+		// point it wanted to delete turns out to still be in contact. A prune that
+		// removes and adds in the same frame is a replacement, not a removal, and
+		// the two fail in different ways.
+		int32 PointsAdded = 0;
+
 		// Set when every removed point sat on an edge meeting at one vertex, which
 		// is the signature of a converged group sliding over that corner.
 		int32 SharedShapeIndex = IndexNone;
@@ -184,6 +190,37 @@ namespace TautRope
 	};
 
 	TAUTROPE_CORE_API SlideReport AnalyseSlides(const Recording& InRecording, int32 LookaheadFrames = 30);
+
+	// Which phase the rope was inside a shape after, frame by frame. This is the
+	// first question to ask of any penetration: a rope that is clean after
+	// collision and dirty after pruning lost a point it needed, while one already
+	// dirty after movement or collision was never given the point in the first
+	// place. The two have nothing in common but the symptom.
+	struct TAUTROPE_CORE_API PenetrationOnset
+	{
+		int32 Frame = IndexNone;
+		double AfterMovement = 0.0;
+		double AfterCollision = 0.0;
+		double AfterPruning = 0.0;
+
+		// Points the collision phase added and the pruning phase took away, so the
+		// blame can be read off directly.
+		int32 Inserted = 0;
+		int32 Removed = 0;
+	};
+
+	struct TAUTROPE_CORE_API OnsetReport
+	{
+		std::vector<PenetrationOnset> Onsets;
+		int32 BlamedOnMovement = 0;
+		int32 BlamedOnCollision = 0;
+		int32 BlamedOnPruning = 0;
+	};
+
+	// Frames where the rope goes from clean to inside a shape, with the phase
+	// breakdown for each. MaxResults keeps the earliest ones, which are the ones
+	// that matter -- later onsets are usually the same rope still broken.
+	TAUTROPE_CORE_API OnsetReport AnalyseOnsets(const Recording& InRecording, double Threshold = 1.0, int32 MaxResults = 12);
 
 	// Decades of the dimensionless conditioning number, so the distribution can be
 	// read rather than guessed at. Widening or narrowing the coplanar reject band

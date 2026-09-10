@@ -309,6 +309,64 @@ namespace TautRope
 	}
 
 
+
+	OnsetReport AnalyseOnsets(const Recording& InRecording, double Threshold, int32 MaxResults)
+	{
+		OnsetReport Report;
+
+		std::vector<ShapePlanes> Planes;
+		Planes.reserve(InRecording.Shapes.size());
+		for (const CollisionShape& Shape : InRecording.Shapes)
+		{
+			Planes.push_back(FindShapePlanes(Shape));
+		}
+
+		const auto Inside = [&Planes](const std::vector<RecordedPoint>& Points)
+		{
+			double Worst = 0.0;
+			for (int32 i = 0; i + 1 < Num(Points); ++i)
+			{
+				for (const ShapePlanes& P : Planes)
+				{
+					const double Length = SegmentInsideLength(P, Points[i].Location, Points[i + 1].Location);
+					if (Length > Worst) { Worst = Length; }
+				}
+			}
+			return Worst;
+		};
+
+		bool bWasInside = false;
+		for (int32 FrameIndex = 0; FrameIndex < Num(InRecording.Frames); ++FrameIndex)
+		{
+			const FrameCapture& Capture = InRecording.Frames[FrameIndex].Capture;
+
+			PenetrationOnset Onset;
+			Onset.Frame = FrameIndex;
+			Onset.AfterMovement = Inside(Capture.AfterMovement);
+			Onset.AfterCollision = Inside(Capture.AfterCollision);
+			Onset.AfterPruning = Inside(Capture.AfterPruning);
+
+			const bool bIsInside = Onset.AfterPruning > Threshold;
+			if (bIsInside && !bWasInside)
+			{
+				Onset.Inserted = Num(Capture.AfterCollision) - Num(Capture.AfterMovement);
+				Onset.Removed = Num(Capture.AfterCollision) - Num(Capture.AfterPruning);
+
+				// Attribute to the earliest phase that was already dirty.
+				if (Onset.AfterMovement > Threshold)       { ++Report.BlamedOnMovement; }
+				else if (Onset.AfterCollision > Threshold) { ++Report.BlamedOnCollision; }
+				else                                       { ++Report.BlamedOnPruning; }
+
+				if (Num(Report.Onsets) < MaxResults)
+				{
+					Report.Onsets.push_back(Onset);
+				}
+			}
+			bWasInside = bIsInside;
+		}
+
+		return Report;
+	}
 	SlideReport AnalyseSlides(const Recording& InRecording, int32 LookaheadFrames)
 	{
 		SlideReport Report;
@@ -367,7 +425,18 @@ namespace TautRope
 				}
 			}
 
-			if (Removed.empty())
+			int32 Added = 0;
+			for (const RecordedPoint& P : After)
+			{
+				bool bExisted = false;
+				for (const RecordedPoint& Q : Before)
+				{
+					if (Q.Id == P.Id) { bExisted = true; break; }
+				}
+				if (!bExisted) { ++Added; }
+			}
+
+			if (Removed.empty() && Added == 0)
 			{
 				continue;
 			}
@@ -376,6 +445,7 @@ namespace TautRope
 			Event.Frame = FrameIndex;
 			Event.PointsBefore = Num(Before);
 			Event.PointsRemoved = Num(Removed);
+			Event.PointsAdded = Added;
 			Event.InsideBefore = RopeInside(Before);
 			Event.InsideAfter = RopeInside(After);
 

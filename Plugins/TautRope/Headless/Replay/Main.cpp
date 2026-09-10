@@ -29,7 +29,7 @@ namespace
 			"  --verify    compare the replay against the captured output\n"
 			"  --info      summarise the input and exit without replaying\n"
 			"  --analyse <what>   measure the recording without replaying;\n"
-			"              what = penetration | edges | vertex | slides | ties | conditioning | all\n"
+			"              what = penetration | edges | vertex | slides | onsets | ties | conditioning | all\n"
 			"\n"
 			"exit codes:\n"
 			"  0 ok   1 error   2 usage   3 verify failed\n"
@@ -176,6 +176,29 @@ namespace
 	}
 
 
+
+	void PrintOnsets(const TautRope::Recording& R)
+	{
+		const TautRope::OnsetReport O = TautRope::AnalyseOnsets(R);
+		std::printf("penetration onsets\n");
+		std::printf("  already inside after movement  %d\n", O.BlamedOnMovement);
+		std::printf("  first inside after collision   %d\n", O.BlamedOnCollision);
+		std::printf("  only inside after pruning      %d\n", O.BlamedOnPruning);
+		if (O.Onsets.empty())
+		{
+			std::printf("  the rope never goes from clean to inside a shape\n");
+			return;
+		}
+		std::printf("\n  frame   after move  after coll  after prune  +ins  -rem  blame\n");
+		for (const TautRope::PenetrationOnset& E : O.Onsets)
+		{
+			const char* Blame = E.AfterMovement > 1.0 ? "movement"
+				: (E.AfterCollision > 1.0 ? "collision" : "pruning");
+			std::printf("  %-7d %10.3f  %10.3f  %11.3f  %4d  %4d  %s\n",
+				E.Frame, E.AfterMovement, E.AfterCollision, E.AfterPruning,
+				E.Inserted, E.Removed, Blame);
+		}
+	}
 	void PrintSlides(const TautRope::Recording& R)
 	{
 		const TautRope::SlideReport S = TautRope::AnalyseSlides(R);
@@ -192,7 +215,7 @@ namespace
 		std::printf("\n  frame  pts  -n  shape/vert  spread   inside b/a        worst inside within 30f\n");
 		for (const TautRope::SlideEvent& E : S.Events)
 		{
-			std::printf("  %-6d %-4d %-3d ", E.Frame, E.PointsBefore, E.PointsRemoved);
+			std::printf("  %-6d %-4d %-3d %-5d ", E.Frame, E.PointsBefore, E.PointsRemoved, E.PointsAdded);
 			if (E.SharedVertIndex != TautRope::IndexNone)
 			{
 				std::printf("%d/v%-8d ", E.SharedShapeIndex, E.SharedVertIndex);
@@ -420,6 +443,7 @@ int main(int argc, char** argv)
 		if (bAll || std::strcmp(Analyse, "edges") == 0)        { std::printf("\n"); PrintEdges(Input); bKnown = true; }
 		if (bAll || std::strcmp(Analyse, "vertex") == 0)       { std::printf("\n"); PrintVertexApproaches(Input); bKnown = true; }
 		if (bAll || std::strcmp(Analyse, "slides") == 0)       { std::printf("\n"); PrintSlides(Input); bKnown = true; }
+		if (bAll || std::strcmp(Analyse, "onsets") == 0)       { std::printf("\n"); PrintOnsets(Input); bKnown = true; }
 		if (bAll || std::strcmp(Analyse, "ties") == 0)         { std::printf("\n"); PrintTies(Input); bKnown = true; }
 		if (bAll || std::strcmp(Analyse, "conditioning") == 0) { std::printf("\n"); PrintConditioning(Input); bKnown = true; }
 		if (!bKnown)
