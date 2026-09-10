@@ -225,6 +225,12 @@ namespace
 				std::printf("%-11s ", "-");
 			}
 			std::printf("%7.3f  %7.3f / %-7.3f  %8.3f @ frame %-6d", E.SpreadBefore, E.InsideBefore, E.InsideAfter, E.InsideWithinWindow, E.InsideWindowFrame);
+			std::printf("  removed from shape");
+			for (const TautRope::int32 Sh : E.RemovedFromShapes) { std::printf(" %d", Sh); }
+			if (E.PenetratedShape != TautRope::IndexNone && E.InsideAfter > 1.0)
+			{
+				std::printf(", inside shape %d", E.PenetratedShape);
+			}
 			if (E.bAllRemovedOnInFaceEdge)      { std::printf("  all in-face"); }
 			else if (E.bAnyRemovedOnInFaceEdge) { std::printf("  some in-face"); }
 			std::printf("\n");

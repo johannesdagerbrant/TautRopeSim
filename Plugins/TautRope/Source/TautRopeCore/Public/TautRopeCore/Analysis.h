@@ -156,6 +156,13 @@ namespace TautRope
 		// the two fail in different ways.
 		int32 PointsAdded = 0;
 
+		// Which shapes the removed points were attached to, and which shape the
+		// rope ends up inside. A prune that removes points from one shape and
+		// penetrates a different one is a cross-shape failure: the rope unwrapped
+		// over there, and the points holding it off the solid over here went with it.
+		std::vector<int32> RemovedFromShapes;
+		int32 PenetratedShape = IndexNone;
+
 		// Set when every removed point sat on an edge meeting at one vertex, which
 		// is the signature of a converged group sliding over that corner.
 		int32 SharedShapeIndex = IndexNone;

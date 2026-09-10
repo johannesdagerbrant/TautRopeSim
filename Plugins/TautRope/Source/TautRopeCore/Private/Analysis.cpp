@@ -389,15 +389,17 @@ namespace TautRope
 			InFace.push_back(std::move(Flags));
 		}
 
-		const auto RopeInside = [&Planes](const std::vector<RecordedPoint>& Points)
+		int32 WorstShape = IndexNone;
+		const auto RopeInside = [&Planes, &WorstShape](const std::vector<RecordedPoint>& Points)
 		{
 			double Worst = 0.0;
+			WorstShape = IndexNone;
 			for (int32 i = 0; i + 1 < Num(Points); ++i)
 			{
-				for (const ShapePlanes& P : Planes)
+				for (int32 s = 0; s < Num(Planes); ++s)
 				{
-					const double Length = SegmentInsideLength(P, Points[i].Location, Points[i + 1].Location);
-					if (Length > Worst) { Worst = Length; }
+					const double Length = SegmentInsideLength(Planes[s], Points[i].Location, Points[i + 1].Location);
+					if (Length > Worst) { Worst = Length; WorstShape = s; }
 				}
 			}
 			return Worst;
@@ -448,6 +450,15 @@ namespace TautRope
 			Event.PointsAdded = Added;
 			Event.InsideBefore = RopeInside(Before);
 			Event.InsideAfter = RopeInside(After);
+			Event.PenetratedShape = WorstShape;
+			for (const RecordedPoint& P : Removed)
+			{
+				if (P.ShapeIndex >= 0
+					&& std::find(Event.RemovedFromShapes.begin(), Event.RemovedFromShapes.end(), P.ShapeIndex) == Event.RemovedFromShapes.end())
+				{
+					Event.RemovedFromShapes.push_back(P.ShapeIndex);
+				}
+			}
 
 			// Do all the removed points sit on edges that meet at a single vertex?
 			// That is what a converged group sliding over a corner looks like.
