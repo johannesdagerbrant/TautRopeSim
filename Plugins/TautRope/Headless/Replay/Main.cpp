@@ -11,6 +11,7 @@
 
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -177,6 +178,30 @@ namespace
 
 
 
+
+	void PrintRemovals(const TautRope::Recording& R, int Frame)
+	{
+		const std::vector<TautRope::RemovalCause> Causes = TautRope::ExplainRemovals(R, Frame);
+		std::printf("removals at frame %d\n", Frame);
+		if (Causes.empty())
+		{
+			std::printf("  the pruning phase removed nothing\n");
+			return;
+		}
+		std::printf("  id     shape/edge  flat  reason          wrap given  wrap survivors\n");
+		for (const TautRope::RemovalCause& C : Causes)
+		{
+			const char* Reason =
+				C.Reason == TautRope::RemovalReason::VertexCone ? "vertex cone"
+				: C.Reason == TautRope::RemovalReason::DuplicateEdge ? "duplicate edge"
+				: C.Reason == TautRope::RemovalReason::NotWrapping ? "not wrapping"
+				: "unknown";
+			std::printf("  %-6d %d/%-9d %-5s %-15s %-11s %s\n",
+				C.PointId, C.ShapeIndex, C.EdgeIndex, C.bOnFlatEdge ? "yes" : "no", Reason,
+				C.bWrappingAgainstGivenNeighbours ? "yes" : "no",
+				C.bWrappingAgainstSurvivors ? "yes" : "no");
+		}
+	}
 	void PrintOnsets(const TautRope::Recording& R)
 	{
 		const TautRope::OnsetReport O = TautRope::AnalyseOnsets(R);
@@ -378,6 +403,7 @@ int main(int argc, char** argv)
 	bool bInfoOnly = false;
 	bool bVerify = false;
 	bool bStripInFaceEdges = false;
+	int RemovalFrame = -1;
 	const char* Analyse = nullptr;
 
 	for (int Index = 1; Index < argc; ++Index)
@@ -386,6 +412,10 @@ int main(int argc, char** argv)
 		if (std::strcmp(Arg, "--info") == 0)
 		{
 			bInfoOnly = true;
+		}
+		else if (std::strcmp(Arg, "--removals") == 0 && Index + 1 < argc)
+		{
+			RemovalFrame = std::atoi(argv[++Index]);
 		}
 		else if (std::strcmp(Arg, "--no-in-face-edges") == 0)
 		{
@@ -475,6 +505,12 @@ int main(int argc, char** argv)
 	// analysing a stripped shape reports no shapes and therefore no penetration,
 	// which reads exactly like a fix and is nothing of the kind.
 	const std::vector<TautRope::CollisionShape> OriginalShapes = Input.Shapes;
+
+	if (RemovalFrame >= 0)
+	{
+		PrintRemovals(Input, RemovalFrame);
+		return 0;
+	}
 
 	if (bStripInFaceEdges)
 	{

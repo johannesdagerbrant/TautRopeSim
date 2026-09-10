@@ -27,8 +27,13 @@ namespace TautRope
 			for (int32 j = i - 1; j >= 0; --j)
 			{
 				const Point& Prev = RopePoints[j];
-				if (Prev.VertIndex == PointAtVert.VertIndex ||
-					Contains(AdjacentEdges, Prev.EdgeIndex))
+				// AdjacentEdges and VertIndex are indices into PointAtVert's own
+				// shape, so they mean nothing next to a point on another shape.
+				// Comparing them across shapes made shape 4 edge 13 and shape 0
+				// edge 13 the same edge, and pruned a point a hundred units away.
+				if (Prev.ShapeIndex == PointAtVert.ShapeIndex
+					&& (Prev.VertIndex == PointAtVert.VertIndex
+						|| Contains(AdjacentEdges, Prev.EdgeIndex)))
 				{
 					GroupStart = j;
 				}
@@ -41,8 +46,9 @@ namespace TautRope
 			for (int32 j = i + 1; j < Num(RopePoints); ++j)
 			{
 				const Point& Next = RopePoints[j];
-				if (Next.VertIndex == PointAtVert.VertIndex ||
-					Contains(AdjacentEdges, Next.EdgeIndex))
+				if (Next.ShapeIndex == PointAtVert.ShapeIndex
+					&& (Next.VertIndex == PointAtVert.VertIndex
+						|| Contains(AdjacentEdges, Next.EdgeIndex)))
 				{
 					GroupEnd = j;
 				}

@@ -206,6 +206,28 @@ namespace TautRope
 
 	TAUTROPE_CORE_API SlideReport AnalyseSlides(const Recording& InRecording, int32 LookaheadFrames = 30);
 
+	// Why the pruning phase removed a point, by re-running the production
+	// decisions on the recorded state. Which of the three reasons fired says
+	// which piece of logic to look at, and whether the point was on a flat edge
+	// says whether the degenerate case is involved.
+	enum class RemovalReason { Unknown, VertexCone, DuplicateEdge, NotWrapping };
+
+	struct TAUTROPE_CORE_API RemovalCause
+	{
+		int32 PointId = IndexNone;
+		int32 ShapeIndex = IndexNone;
+		int32 EdgeIndex = IndexNone;
+		RemovalReason Reason = RemovalReason::Unknown;
+		bool bOnFlatEdge = false;
+
+		// What the wrap test would have said against the neighbours that survive,
+		// as opposed to the ones it was actually given.
+		bool bWrappingAgainstGivenNeighbours = false;
+		bool bWrappingAgainstSurvivors = false;
+	};
+
+	TAUTROPE_CORE_API std::vector<RemovalCause> ExplainRemovals(const Recording& InRecording, int32 FrameIndex);
+
 	// Which phase the rope was inside a shape after, frame by frame. This is the
 	// first question to ask of any penetration: a rope that is clean after
 	// collision and dirty after pruning lost a point it needed, while one already

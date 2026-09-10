@@ -1,6 +1,9 @@
 #include "TautRopeCore/Analysis.h"
 
 #include "TautRopeCore/Collision.h"
+#include "TautRopeCore/Point.h"
+#include "TautRopeCore/Pruning.h"
+#include "TautRopeCore/VertexHandling.h"
 
 #include <algorithm>
 #include <cmath>
@@ -357,6 +360,110 @@ namespace TautRope
 
 
 
+
+	std::vector<RemovalCause> ExplainRemovals(const Recording& InRecording, int32 FrameIndex)
+	{
+		std::vector<RemovalCause> Causes;
+		if (FrameIndex < 0 || FrameIndex >= Num(InRecording.Frames))
+		{
+			return Causes;
+		}
+
+		std::vector<std::vector<bool>> IsFlat;
+		for (const CollisionShape& Shape : InRecording.Shapes)
+		{
+			std::vector<bool> Flags(static_cast<std::size_t>(Num(Shape.Edges)), false);
+			for (const int32 EdgeIndex : FindShapePlanes(Shape).InFaceEdges)
+			{
+				Flags[static_cast<std::size_t>(EdgeIndex)] = true;
+			}
+			IsFlat.push_back(std::move(Flags));
+		}
+
+		const FrameCapture& Capture = InRecording.Frames[FrameIndex].Capture;
+		const std::vector<RecordedPoint>& Before = Capture.AfterCollision;
+		const std::vector<RecordedPoint>& After = Capture.AfterPruning;
+
+		std::vector<bool> Survives(static_cast<std::size_t>(Num(Before)), false);
+		for (int32 i = 0; i < Num(Before); ++i)
+		{
+			for (const RecordedPoint& Q : After)
+			{
+				if (Q.Id == Before[i].Id) { Survives[static_cast<std::size_t>(i)] = true; break; }
+			}
+		}
+
+		// Production decides the cone removals first, exactly as PruningPhase does.
+		std::vector<Point> Points;
+		Points.reserve(Before.size());
+		for (const RecordedPoint& P : Before)
+		{
+			Point Restored;
+			Restored.Location = P.Location;
+			Restored.ShapeIndex = P.ShapeIndex;
+			Restored.EdgeIndex = P.EdgeIndex;
+			Restored.VertIndex = P.VertIndex;
+			Restored.Id = P.Id;
+			Points.push_back(Restored);
+		}
+		const std::vector<bool> ConeRemovals = GetAdjacentPointsOnSameVertexCone(Points, InRecording.Shapes);
+
+		for (int32 i = 1; i + 1 < Num(Before); ++i)
+		{
+			if (Survives[static_cast<std::size_t>(i)])
+			{
+				continue;
+			}
+
+			RemovalCause Cause;
+			Cause.PointId = Before[i].Id;
+			Cause.ShapeIndex = Before[i].ShapeIndex;
+			Cause.EdgeIndex = Before[i].EdgeIndex;
+			if (Cause.ShapeIndex >= 0 && Cause.EdgeIndex >= 0 && Cause.ShapeIndex < Num(IsFlat))
+			{
+				Cause.bOnFlatEdge = IsFlat[Cause.ShapeIndex][static_cast<std::size_t>(Cause.EdgeIndex)];
+			}
+
+			if (i < Num(ConeRemovals) && ConeRemovals[i])
+			{
+				Cause.Reason = RemovalReason::VertexCone;
+				Causes.push_back(Cause);
+				continue;
+			}
+
+			if (Cause.ShapeIndex < 0 || Cause.EdgeIndex < 0)
+			{
+				Causes.push_back(Cause);
+				continue;
+			}
+
+			if (Before[i].ShapeIndex == Before[i - 1].ShapeIndex && Before[i].EdgeIndex == Before[i - 1].EdgeIndex)
+			{
+				Cause.Reason = RemovalReason::DuplicateEdge;
+				Causes.push_back(Cause);
+				continue;
+			}
+
+			const Quat& EdgeRotation = InRecording.Shapes[Cause.ShapeIndex].EdgeRotations[Cause.EdgeIndex];
+			Cause.bWrappingAgainstGivenNeighbours = IsRopeWrappingEdge(
+				Before[i - 1].Location, Before[i].Location, Before[i + 1].Location, EdgeRotation);
+
+			int32 Prev = i - 1;
+			while (Prev > 0 && !Survives[static_cast<std::size_t>(Prev)]) { --Prev; }
+			int32 Next = i + 1;
+			while (Next + 1 < Num(Before) && !Survives[static_cast<std::size_t>(Next)]) { ++Next; }
+			Cause.bWrappingAgainstSurvivors = IsRopeWrappingEdge(
+				Before[Prev].Location, Before[i].Location, Before[Next].Location, EdgeRotation);
+
+			if (!Cause.bWrappingAgainstGivenNeighbours)
+			{
+				Cause.Reason = RemovalReason::NotWrapping;
+			}
+			Causes.push_back(Cause);
+		}
+
+		return Causes;
+	}
 	OnsetReport AnalyseOnsets(const Recording& InRecording, double Threshold, int32 MaxResults)
 	{
 		OnsetReport Report;

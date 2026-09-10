@@ -127,20 +127,34 @@ recording 105002 from 829 to 9, and was still the wrong fix: the peak got worse
 (138 to 260 units) and a previously clean recording gained two penetrating
 frames. Converging on a wrong verdict faster is not correctness.
 
-An in-face edge is a triangulation diagonal lying flat across a face, and a rope
-point on one sits in the middle of a flat surface where there is nothing to wrap.
-Deleting those edges outright is the subtractive fix, and on 105002 it works:
-frames affected 829 to 6, worst rope line 138.3 to 3.6, points 2..49 to 2..27,
-the remove sweep never firing at all, replay twice as fast. On 191942 the same
-change is catastrophic -- 74 frames to 1848 -- and `--analyse onsets` says why:
-blamed on collision, with zero insertions.
+An edge whose two adjacent faces are coplanar -- a flat edge -- is a legitimate
+part of a convex hull, and the simulation must support it. **Do not try to fix
+anything by removing them.** That was tried: deleting them transforms recording
+105002 (829 penetrating frames to 6, worst line 138.3 to 3.6, points 2..49 to
+2..27, the remove sweep never firing, replay twice as fast) and destroys 191942
+(74 frames to 1848). `--analyse onsets` says why the second one breaks: blamed on
+collision, with zero insertions.
 
-That is the actual root. **Contact detection is edge-only; there are no faces.**
-So a diagonal is doing two incompatible jobs: it is the only collision feature
-covering a face's interior, and it is also offered to the rope as a wrap anchor.
-The first is load-bearing, the second is wrong. Until the sweep can test a face,
-deleting diagonals removes real collision coverage, and keeping them feeds the
-pruning phase points it cannot handle. Neither half can be fixed alone.
+That is worth understanding, because it is the root of the whole area.
+**Contact detection is edge-only; there are no faces.** A flat edge is therefore
+the only collision feature covering the interior of the face it crosses. Remove
+it and the rope passes straight through the middle of a flat surface undetected.
+So the edge is load-bearing for collision and must stay.
+
+It also turned out not to be what was breaking recording 105002 at all. Asking
+`--removals 1043` which decision removed each point named
+`GetAdjacentPointsOnSameVertexCone` for all three, and none of them were on a
+flat edge. That rule read `VertToEdges` from the vertex point's own shape and
+then compared those edge indices against neighbours belonging to any shape,
+so shape 4 edge 13 and shape 0 edge 13 were the same edge and a point a hundred
+units away was pruned along with the group. Requiring the same shape before
+comparing indices fixed it: 829 penetrating frames to 264, and nothing else moved.
+
+The lesson is the tooling one. Three plausible hypotheses -- the tie in the
+removal sweep, stale neighbours in the wrap verdict, flat edges being offered as
+wrap anchors -- were all real code faults, all argued from the geometry, and none
+of them caused the failure being investigated. Attributing the actual decision
+came first and would have saved two rejected experiments.
 
 `--no-in-face-edges` on the replay tool exists to keep measuring this. Note that
 it strips edges for the simulation but writes the original shapes into the
@@ -158,6 +172,8 @@ tautrope-replay <recording>              replay, report what it produced
 tautrope-replay <recording> --verify     compare against the captured output
 tautrope-replay <recording> --no-in-face-edges
                                          experiment: simulate without face diagonals
+tautrope-replay <recording> --removals <frame>
+                                         which decision removed each point that frame
 tautrope-replay <recording> -o <path>    write the replay result out
 tautrope-replay --info <recording>       summarise without replaying
 tautrope-replay <recording> --analyse <what>
