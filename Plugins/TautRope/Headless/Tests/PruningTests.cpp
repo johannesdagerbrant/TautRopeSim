@@ -3,6 +3,7 @@
 #include "Framework.h"
 
 #include "TautRopeCore/Collision.h"
+#include "TautRopeCore/Point.h"
 #include "TautRopeCore/CollisionShape.h"
 #include "TautRopeCore/Pruning.h"
 
@@ -89,4 +90,57 @@ TEST(RemoveSweep_NeighbourEdgeIsOnlyProtectedWhileItIsIgnored)
 	CHECK(!Protected.bIsHit);
 	CHECK(Exposed.bIsHit);
 	CHECK_EQ(Exposed.EdgeIndex, 0);
+}
+
+// PROVES: a point whose wrap verdict would be judged against a neighbour that
+// is already marked for removal in the same pass is kept this frame, not
+// removed on the stale verdict.
+// FIXES: the mass-arrival cascade on recording 154909. The fan movement solve
+// makes whole vertex-cone groups arrive in one frame; the wrap verdict for the
+// next point along, judged against a doomed cone member, said "not wrapping"
+// while the survivor configuration wraps (the flip
+// Pruning_WrapVerdictDependsOnWhichNeighbourSurvives isolates). Removing it put
+// 92 units of rope inside a shape from frame 142 to the end of the recording;
+// with the deferral the same replay has zero penetrating frames.
+// Sabotage: drop the deferral from GetPointsToRemove and this goes red with the
+// judged point marked.
+TEST(Pruning_WrapVerdictIsDeferredWhileItsNeighbourIsDoomed)
+{
+	TautRope::CollisionShape Shape;
+	Shape.Vertices = { Vec3(-2.0, 0.0, -1.0), Vec3(-2.0, 0.0, 1.0), Vec3(0.0, 0.0, -1.0), Vec3(0.0, 0.0, 1.0) };
+	Shape.Edges = { TautRope::Int2(0, 1), TautRope::Int2(2, 3) };
+	Shape.VertToEdges = { { 0 }, { 0 }, { 1 }, { 1 } };
+	Shape.EdgeRotations = { TautRope::Quat(), TautRope::Quat() };
+	Shape.IsCornerVertexList = { true, true, true, true };
+
+	// Two points on edge 0 make the second a same-edge duplicate, so it is
+	// marked for removal without any geometry involved. The judged point sits
+	// next on edge 1, placed so the wrap verdict against the doomed duplicate
+	// reads "not wrapping" (both neighbours on the same side of its edge plane).
+	std::vector<TautRope::Point> Points(5);
+	Points[0].Location = Vec3(-3.0, -1.0, 0.0);
+
+	Points[1].Location = Vec3(-2.0, 0.5, 0.0);
+	Points[1].ShapeIndex = 0;
+	Points[1].EdgeIndex = 0;
+
+	Points[2].Location = DoomedNeighbour;
+	Points[2].ShapeIndex = 0;
+	Points[2].EdgeIndex = 0;
+
+	Points[3].Location = Judged;
+	Points[3].ShapeIndex = 0;
+	Points[3].EdgeIndex = 1;
+
+	Points[4].Location = OtherSide;
+
+	const std::vector<bool> ToRemove = TautRope::GetPointsToRemove(Points, { Shape });
+
+	// The duplicate is marked; the stale wrap verdict next to it is deferred.
+	CHECK(ToRemove[2]);
+	CHECK(!ToRemove[3]);
+
+	const bool bAgainstDoomed = TautRope::IsRopeWrappingEdge(
+		DoomedNeighbour, Judged, OtherSide, FlatEdge);
+	CHECK(!bAgainstDoomed);
 }

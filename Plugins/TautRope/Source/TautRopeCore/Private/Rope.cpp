@@ -133,9 +133,27 @@ namespace TautRope
 		{
 			RopeTargetLocations[i] = RopePoints[i].Location;
 		}
-		// TODO: Grouping of rope points that belong to the same vertex fan of edges so we can draw a straight line across multiple edges in 2d space,
+		// Runs of points whose edges fan out from one vertex are straightened as
+		// a group: unfold the fan to 2D, draw the straight line between the
+		// neighbouring anchors, and place every point in one solve. Solving them
+		// one point at a time contracts the run by a neighbour-average step per
+		// frame, which is the convergence crawl this replaces. Everything else
+		// keeps the per-point solve.
+		const std::vector<MovementGroup> MovementGroups = GetMovementGroups(RopePoints, NearbyShapes);
+		int32 NextGroupIndex = 0;
 		for (int32 i = 1; i < Num(RopePoints) - 1; ++i)
 		{
+			if (NextGroupIndex < Num(MovementGroups) && MovementGroups[NextGroupIndex].FirstPointIndex == i)
+			{
+				const MovementGroup& Group = MovementGroups[NextGroupIndex];
+				++NextGroupIndex;
+				if (SolveFanMovementGroup(RopePoints, RopeTargetLocations, Group, NearbyShapes[Group.ShapeIndex]))
+				{
+					i = Group.LastPointIndex;
+					continue;
+				}
+				// Degenerate fan: fall through to the per-point solve below.
+			}
 			Point& PointB = RopePoints[i];
 			if (PointB.VertIndex != IndexNone)
 			{
@@ -299,34 +317,7 @@ namespace TautRope
 
 	bool Rope::PruningPhase(IDebugDraw* Debug)
 	{
-		std::vector<bool> PointsToRemove = GetAdjacentPointsOnSameVertexCone(RopePoints, NearbyShapes);
-		for (int32 i = 1; i < Num(RopePoints) - 1; ++i)
-		{
-			if (PointsToRemove[i])
-			{
-				continue;
-			}
-			const Point& LastPoint = RopePoints[i - 1];
-			const Point& CurrentPoint = RopePoints[i];
-			const Point& NextPoint = RopePoints[i + 1];
-			const CollisionShape& Shape = NearbyShapes[CurrentPoint.ShapeIndex];
-			if (CurrentPoint.ShapeIndex == LastPoint.ShapeIndex && CurrentPoint.EdgeIndex == LastPoint.EdgeIndex)
-			{
-				PointsToRemove[i] = true;
-				continue;
-			}
-			const Quat& EdgeRotation = Shape.EdgeRotations[CurrentPoint.EdgeIndex];
-			const bool bIsRopeWrappingEdge = IsRopeWrappingEdge(
-				LastPoint.Location
-				, CurrentPoint.Location
-				, NextPoint.Location
-				, EdgeRotation
-			);
-			if (!bIsRopeWrappingEdge)
-			{
-				PointsToRemove[i] = true;
-			}
-		}
+		std::vector<bool> PointsToRemove = GetPointsToRemove(RopePoints, NearbyShapes);
 		for (int32 i = Num(RopePoints) - 2; i > 0; --i)
 		{
 			if (PointsToRemove[i])
