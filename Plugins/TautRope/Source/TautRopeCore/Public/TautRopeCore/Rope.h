@@ -58,6 +58,18 @@ namespace TautRope
 		int32 MostRopePoints = 0;
 
 	private:
+		// Computes each point's target for this frame. The goal of the movement
+		// phase is to make the rope's total length as short as the constraints
+		// allow - every target should move the rope toward the taut geodesic
+		// between the endpoints, and no decision here should require the rope to
+		// become longer first. Points ride shape edges, so a target is a position
+		// along the point's edge (or a vertex-crossing when the shortest path
+		// pulls past the edge's end); runs of points whose edges fan around one
+		// vertex are straightened in a single unfolded solve, everything else
+		// point by point against its neighbours. The collision phase may then
+		// shorten less than asked - the swept path can hit geometry the straight
+		// targets ignore - but it is this phase that decides where the rope is
+		// trying to go.
 		std::vector<Vec3> MovementPhase(
 			const Vec3& StartLocation
 			, const Vec3& EndLocation
