@@ -11,6 +11,7 @@
 #include "TautRopeCore/Point.h"
 #include "TautRopeCore/Recording.h"
 #include "TautRopeCore/Rope.h"
+#include "TautRopeCore/VertexHandling.h"
 
 #include <cmath>
 #include <vector>
@@ -323,4 +324,51 @@ TEST(Movement_CoincidentCornersOnDivergingEdgesStayAnchored)
 	const double Moved = RunTwinFixture(AlongX, AlongY, Vec3(-20.0, 0.0, 0.0));
 	std::printf("      corner pair moved %.3f units\n", Moved);
 	CHECK(Moved < 2.0);
+}
+
+// PROVES: a point left in the vertex-crossing state is transferred onto the
+// adjacent edge that most opposes the rope's sliding direction, attached
+// mid-edge with its crossing state cleared.
+// FIXES: the boil on recording 104457. A crossing the collision sweep failed
+// to reattach - routine at a many-edged hub - stayed in vertex state, the cone
+// rule pruned it, and the remove sweep re-routed the rope back onto the
+// arrival side, repeating at ~2.3 fresh points per frame; the ridge left
+// unattached during the cycle held 4.79 units of rope inside shape 7 for a
+// thousand frames. With the transfer wired in after the collision phase the
+// same replay allocates 140 ids across the whole run and recovers to zero
+// penetration. Sabotage: pick the LEAST opposing edge instead and this goes
+// red on the destination edge.
+TEST(VertexSlide_TransfersCrossingPointOntoTheFarSideEdge)
+{
+	// A wide fan: three edges at 170, 90 and 10 degrees. Wide on purpose - the
+	// transfer targets an edge that continues the slide past the vertex, so the
+	// arrival edge's opposite ray (at -10 degrees here) must have an adjacent
+	// edge within 90 degrees of it, which edge 2 at 10 degrees is.
+	TautRope::CollisionShape Shape;
+	const double R = 100.0;
+	Shape.Vertices = {
+		Vec3(0.0, 0.0, 0.0),
+		Vec3(R * std::cos(2.9670597283903604), R * std::sin(2.9670597283903604), 0.0),
+		Vec3(0.0, R, 0.0),
+		Vec3(R * std::cos(0.17453292519943295), R * std::sin(0.17453292519943295), 0.0),
+	};
+	Shape.Edges = { Int2(1, 0), Int2(0, 2), Int2(0, 3) };
+	Shape.VertToEdges = { { 0, 1, 2 }, { 0 }, { 1 }, { 2 } };
+	Shape.EdgeRotations = { Quat(), Quat(), Quat() };
+	Shape.IsCornerVertexList = { false, true, true, true };
+
+	// The rope runs left to right across the fan vertex; the point sits on the
+	// vertex, arrived via edge 0 (the left edge), so the far side is edge 2.
+	std::vector<TautRope::Point> Points(3);
+	Points[0].Location = Vec3(-120.0, 40.0, 0.0);
+	Points[1].Location = Shape.Vertices[0];
+	Points[1].ShapeIndex = 0;
+	Points[1].EdgeIndex = 0;
+	Points[1].VertIndex = 0;
+	Points[2].Location = Vec3(120.0, 40.0, 0.0);
+
+	TautRope::LetPointsOnVertexSlideOntoNewEdge(Points, { Shape });
+
+	CHECK_EQ(Points[1].VertIndex, TautRope::IndexNone);
+	CHECK_EQ(Points[1].EdgeIndex, 2);
 }

@@ -68,6 +68,15 @@ namespace TautRope
 		}
 		// Collision phase
 		const bool bHadCollision = CollisionPhase(TargetRopePoints, Debug);
+		// A point still in the vertex-crossing state after the sweeps is one the
+		// collision phase failed to reattach - routine at a many-edged hub, where
+		// the small crossing offset gives the sweep almost nothing to hit. Left
+		// in that state, the cone rule prunes it and the remove sweep re-routes
+		// the rope back onto the side it arrived from, which repeats every frame:
+		// the boil measured at ~2.3 points per frame on recording 104457, and the
+		// unattached ridge it leaves behind is the persistent penetration there.
+		// Transfer such points onto the far-side edge deterministically instead.
+		LetPointsOnVertexSlideOntoNewEdge(RopePoints, NearbyShapes);
 		if (Capture != nullptr)
 		{
 			CapturePoints(RopePoints, Capture->AfterCollision);
