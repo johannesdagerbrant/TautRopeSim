@@ -170,7 +170,7 @@ TEST(Movement_FanSolvePlacesPointsOnStraightLineAcrossFlatFan)
 	{
 		Targets.push_back(P.Location);
 	}
-	const bool bSolved = TautRope::SolveFanMovementGroup(Points, Targets, Groups[0], Shape);
+	const bool bSolved = TautRope::SolveFanMovementGroup(Points, Targets, Groups[0], { Shape });
 	CHECK(bSolved);
 
 	for (int i = 1; i <= 3; ++i)
@@ -217,7 +217,7 @@ TEST(Movement_FanSolveSnapsMissedEdgesToTheSharedVertex)
 	{
 		Targets.push_back(P.Location);
 	}
-	const bool bSolved = TautRope::SolveFanMovementGroup(Points, Targets, Groups[0], Shape);
+	const bool bSolved = TautRope::SolveFanMovementGroup(Points, Targets, Groups[0], { Shape });
 	CHECK(bSolved);
 
 	for (int i = 1; i <= 3; ++i)
@@ -371,4 +371,77 @@ TEST(VertexSlide_TransfersCrossingPointOntoTheFarSideEdge)
 
 	CHECK_EQ(Points[1].VertIndex, TautRope::IndexNone);
 	CHECK_EQ(Points[1].EdgeIndex, 2);
+}
+
+// PROVES: a fan group whose boundary anchor is a coincident collinear twin
+// anchors through the twin, so the group solves against the rope's real far
+// side and lands on the straight anchor-to-anchor line.
+// FIXES: seam twins pinning whole fan groups: the fan's B anchor was
+// target[Last + 1] unconditionally, and when that was the twin sitting on the
+// group's own last point, the group solved against its own position - ids
+// 205/206 on recording 105822 sat bit-still for 2,442 frames while the rest of
+// the wrap equilibrated behind them. Sabotage: anchor on Last + 1
+// unconditionally again and this goes red with the last point off the line.
+TEST(Movement_FanGroupAnchorsThroughACollinearTwin)
+{
+	const TautRope::CollisionShape Fan = MakeFlatFanShape();
+	// A second hull carrying a collinear copy of the fan's edge 2, the welded
+	// seam situation. Its edge direction matches edge 2's ray from the vertex.
+	TautRope::CollisionShape SeamCopy;
+	SeamCopy.Vertices = { Fan.Vertices[0], Fan.Vertices[3] };
+	SeamCopy.Edges = { Int2(0, 1) };
+	SeamCopy.VertToEdges = { { 0 }, { 0 } };
+	SeamCopy.EdgeRotations = { Quat() };
+	SeamCopy.IsCornerVertexList = { true, true };
+
+	const Vec3 AnchorA(-120.0, 40.0, 0.0);
+	const Vec3 AnchorB(120.0, 40.0, 0.0);
+
+	std::vector<TautRope::Point> Points(6);
+	Points[0].Location = AnchorA;
+	for (int i = 0; i < 3; ++i)
+	{
+		TautRope::Point& P = Points[1 + i];
+		const Int2& Edge = Fan.Edges[i];
+		const int Outer = Edge.X == 0 ? Edge.Y : Edge.X;
+		P.Location = Fan.Vertices[Outer] * 0.05;
+		P.ShapeIndex = 0;
+		P.EdgeIndex = i;
+		P.Id = i;
+	}
+	// The twin: same location as the fan's last point, on the seam copy.
+	Points[4].Location = Points[3].Location;
+	Points[4].ShapeIndex = 1;
+	Points[4].EdgeIndex = 0;
+	Points[4].Id = 4;
+	Points[5].Location = AnchorB;
+
+	const std::vector<TautRope::MovementGroup> Groups =
+		TautRope::GetMovementGroups(Points, { Fan, SeamCopy });
+	CHECK_EQ(Groups.size(), std::size_t(1));
+	if (Groups.size() != 1)
+	{
+		return;
+	}
+	CHECK_EQ(Groups[0].LastPointIndex, 3);
+
+	std::vector<Vec3> Targets;
+	for (const TautRope::Point& P : Points)
+	{
+		Targets.push_back(P.Location);
+	}
+	const bool bSolved = TautRope::SolveFanMovementGroup(Points, Targets, Groups[0], { Fan, SeamCopy });
+	CHECK(bSolved);
+
+	// With the twin anchored through, the whole group lies on the straight
+	// line between the real anchors - the flat-fan oracle.
+	for (int i = 1; i <= 3; ++i)
+	{
+		const double OffLine = DistanceToSegment(Targets[i], AnchorA, AnchorB);
+		if (OffLine >= 0.01)
+		{
+			std::printf("      point %d off the anchor line by %.3f\n", i, OffLine);
+		}
+		CHECK(OffLine < 0.01);
+	}
 }

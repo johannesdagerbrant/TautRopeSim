@@ -158,7 +158,7 @@ namespace TautRope
 			{
 				const MovementGroup& Group = MovementGroups[NextGroupIndex];
 				++NextGroupIndex;
-				if (SolveFanMovementGroup(RopePoints, RopeTargetLocations, Group, NearbyShapes[Group.ShapeIndex]))
+				if (SolveFanMovementGroup(RopePoints, RopeTargetLocations, Group, NearbyShapes))
 				{
 					i = Group.LastPointIndex;
 					continue;

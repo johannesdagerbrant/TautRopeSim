@@ -94,16 +94,51 @@ namespace TautRope
 		std::vector<Point>& RopePoints
 		, std::vector<Vec3>& RopeTargetLocations
 		, const MovementGroup& Group
-		, const CollisionShape& Shape
+		, const std::vector<CollisionShape>& NearbyShapes
 	)
 	{
+		const CollisionShape& Shape = NearbyShapes[Group.ShapeIndex];
 		const int32 First = Group.FirstPointIndex;
 		const int32 Last = Group.LastPointIndex;
 		const int32 NumEdges = Last - First + 1;
 		const Vec3& FanVert = Shape.Vertices[Group.VertIndex];
 
-		const Vec3 ToAnchorA = RopeTargetLocations[First - 1] - FanVert;
-		const Vec3 ToAnchorB = RopeTargetLocations[Last + 1] - FanVert;
+		// Same twin rule as the per-point solve in Rope::MovementPhase: an anchor
+		// that is coincident with the group's boundary point AND on a collinear
+		// edge is the seam twin's redundant copy - anchoring on it pins the whole
+		// group at its own position (ids 205/206 on recording 105822 sat
+		// bit-still for 2,442 frames). Walk through those; never through a
+		// coincident corner on a diverging edge.
+		const auto IsRedundantTwin = [&](const int32 NeighbourIndex, const Point& BoundaryPoint) -> bool
+		{
+			const Point& Neighbour = RopePoints[NeighbourIndex];
+			if (Neighbour.ShapeIndex == IndexNone || Neighbour.EdgeIndex == IndexNone)
+			{
+				return false;
+			}
+			if (static_cast<float>((RopeTargetLocations[NeighbourIndex] - BoundaryPoint.Location).SizeSquared()) > DistanceToleranceSquared)
+			{
+				return false;
+			}
+			const Int2& EdgeB = Shape.Edges[BoundaryPoint.EdgeIndex];
+			const CollisionShape& ShapeN = NearbyShapes[Neighbour.ShapeIndex];
+			const Int2& EdgeN = ShapeN.Edges[Neighbour.EdgeIndex];
+			const Vec3 DirB = (Shape.Vertices[EdgeB.Y] - Shape.Vertices[EdgeB.X]).GetSafeNormal();
+			const Vec3 DirN = (ShapeN.Vertices[EdgeN.Y] - ShapeN.Vertices[EdgeN.X]).GetSafeNormal();
+			return Math::Abs(static_cast<float>(Vec3::Dot(DirB, DirN))) > 0.999f;
+		};
+		int32 AnchorAIndex = First - 1;
+		while (AnchorAIndex > 0 && IsRedundantTwin(AnchorAIndex, RopePoints[First]))
+		{
+			--AnchorAIndex;
+		}
+		int32 AnchorBIndex = Last + 1;
+		while (AnchorBIndex < Num(RopePoints) - 1 && IsRedundantTwin(AnchorBIndex, RopePoints[Last]))
+		{
+			++AnchorBIndex;
+		}
+		const Vec3 ToAnchorA = RopeTargetLocations[AnchorAIndex] - FanVert;
+		const Vec3 ToAnchorB = RopeTargetLocations[AnchorBIndex] - FanVert;
 		const float RadiusA = static_cast<float>(ToAnchorA.Size());
 		const float RadiusB = static_cast<float>(ToAnchorB.Size());
 		if (RadiusA <= KindaSmallNumber || RadiusB <= KindaSmallNumber)

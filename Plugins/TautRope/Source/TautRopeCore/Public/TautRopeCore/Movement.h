@@ -50,7 +50,7 @@ namespace TautRope
 		std::vector<Point>& RopePoints
 		, std::vector<Vec3>& RopeTargetLocations
 		, const MovementGroup& Group
-		, const CollisionShape& Shape
+		, const std::vector<CollisionShape>& NearbyShapes
 	);
 
 	TAUTROPE_CORE_API std::vector<int32> GetCandidateVerts(
