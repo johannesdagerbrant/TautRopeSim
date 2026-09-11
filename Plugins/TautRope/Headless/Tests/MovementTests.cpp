@@ -224,3 +224,103 @@ TEST(Movement_FanSolveSnapsMissedEdgesToTheSharedVertex)
 		CHECK_EQ(Points[i].VertIndex, 0);
 	}
 }
+
+namespace
+{
+	// A seam after welding: two shapes carrying the same segment, so a rope
+	// crossing it holds one point per shape at the same spot.
+	TautRope::CollisionShape MakeSeamEdgeShape(const Vec3& A, const Vec3& B, const Quat& Rotation)
+	{
+		TautRope::CollisionShape Shape;
+		Shape.Vertices = { A, B };
+		Shape.Edges = { Int2(0, 1) };
+		Shape.VertToEdges = { { 0 }, { 0 } };
+		Shape.EdgeRotations = { Rotation };
+		Shape.IsCornerVertexList = { true, true };
+		return Shape;
+	}
+
+	double RunTwinFixture(
+		const TautRope::CollisionShape& ShapeA
+		, const TautRope::CollisionShape& ShapeB
+		, const Vec3& TwinSpot
+	)
+	{
+		TautRope::Rope Rope;
+		Rope.AppendToNearbyShapes({ ShapeA, ShapeB });
+
+		const Vec3 AnchorA(-40.0, -40.0, -20.0);
+		const Vec3 AnchorB(40.0, 40.0, -20.0);
+		std::vector<TautRope::RecordedPoint> Initial(4);
+		Initial[0].Id = 0; Initial[0].Location = AnchorA;
+		Initial[1].Id = 1; Initial[1].Location = TwinSpot;
+		Initial[1].ShapeIndex = 0; Initial[1].EdgeIndex = 0;
+		Initial[2].Id = 2; Initial[2].Location = TwinSpot;
+		Initial[2].ShapeIndex = 1; Initial[2].EdgeIndex = 0;
+		Initial[3].Id = 3; Initial[3].Location = AnchorB;
+		Rope.RestoreState(Initial, 4);
+
+		for (int Frame = 0; Frame < 8; ++Frame)
+		{
+			Rope.UpdateRope(AnchorA, AnchorB, 1500.f);
+		}
+
+		double Moved = 0.0;
+		for (const TautRope::Point& P : Rope.GetPoints())
+		{
+			if (P.ShapeIndex == TautRope::IndexNone)
+			{
+				continue;
+			}
+			const double D = (P.Location - TwinSpot).Size();
+			if (D > Moved)
+			{
+				Moved = D;
+			}
+		}
+		return Moved;
+	}
+}
+
+// PROVES: a cross-shape twin pair on collinear seam edges slides along the
+// seam toward the straightened rope's crossing, because each twin's movement
+// anchors walk through a neighbour that is both coincident and collinear.
+// FIXES: the frozen half of the seam glue (recordings 072336 and 085126): each
+// twin anchored on the twin on top of it, got its own position back, and the
+// pair pinned everything between the seam crossings - the lap around the
+// quartered cone froze at 39 points; with the walk it sheds to 2.
+// Sabotage: anchor on the immediate neighbours again and this goes red with
+// the twins parked at the start.
+TEST(Movement_CollinearSeamTwinsSlideAlongTheSeam)
+{
+	const TautRope::CollisionShape SeamA =
+		MakeSeamEdgeShape(Vec3(-50.0, 0.0, 0.0), Vec3(50.0, 0.0, 0.0), Quat());
+	const TautRope::CollisionShape SeamB =
+		MakeSeamEdgeShape(Vec3(-50.0, 0.0, 0.0), Vec3(50.0, 0.0, 0.0), Quat());
+
+	// The straightened rope crosses the seam at x = 0; the twins start at -20.
+	const double Moved = RunTwinFixture(SeamA, SeamB, Vec3(-20.0, 0.0, 0.0));
+	std::printf("      twins moved %.3f units along the seam\n", Moved);
+	CHECK(Moved > 15.0);
+}
+
+// PROVES: coincident points on DIVERGING edges keep anchoring each other and
+// stay put - the walk is scoped to collinear twins.
+// GUARDS: the double-cone point explosion. Anchoring past a coincident corner
+// on a diverging edge fanned the whole cluster out across the solid in one
+// frame; the editor froze at 151,986 points. Sabotage: drop the collinearity
+// requirement from the walk and this goes red with the pair pulled apart.
+TEST(Movement_CoincidentCornersOnDivergingEdgesStayAnchored)
+{
+	const TautRope::CollisionShape AlongX =
+		MakeSeamEdgeShape(Vec3(-50.0, 0.0, 0.0), Vec3(50.0, 0.0, 0.0), Quat());
+	// The second edge runs along Y through the twin spot; rotation is 90
+	// degrees about Z so its frame matches the edge direction.
+	const TautRope::CollisionShape AlongY =
+		MakeSeamEdgeShape(Vec3(-20.0, -50.0, 0.0), Vec3(-20.0, 50.0, 0.0),
+			Quat(0.0, 0.0, 0.70710678118654752, 0.70710678118654752));
+
+	const double Moved = RunTwinFixture(AlongX, AlongY, Vec3(-20.0, 0.0, 0.0));
+	std::printf("      corner pair moved %.3f units\n", Moved);
+	CHECK(Moved < 2.0);
+}

@@ -8,6 +8,7 @@
 #include "TautRopeCore/Collision.h"
 #include "TautRopeCore/CollisionShape.h"
 #include "TautRopeCore/Point.h"
+#include "TautRopeCore/Rope.h"
 
 #include <cstdio>
 
@@ -115,4 +116,92 @@ TEST(Sweep_ReportsNoTieWhenOnlyOneEdgeIsReached)
 	CHECK_EQ(static_cast<int>(Hit.TiedHits.size()), 0);
 	// The nearer edge wins outright.
 	CHECK_EQ(Hit.EdgeIndex, 0);
+}
+
+namespace
+{
+	TautRope::CollisionShape MakeSeamTestEdge(const Vec3& A, const Vec3& B)
+	{
+		TautRope::CollisionShape Shape;
+		Shape.Vertices = { A, B };
+		Shape.Edges = { TautRope::Int2(0, 1) };
+		Shape.VertToEdges = { { 0 }, { 0 } };
+		Shape.EdgeRotations = { TautRope::Quat() };
+		Shape.IsCornerVertexList = { true, true };
+		return Shape;
+	}
+}
+
+// PROVES: removing a point that sits on one copy of a twin seam edge does not
+// make the remove sweep re-find the other copy at the same spot - the ignored
+// list is expanded with geometric twins, and the removal erases cleanly in one
+// round without inserting anything.
+// FIXES: the remove-sweep runaway on the lap recording (085126): IgnoredEdges
+// matches exact shape/edge pairs, so the other hull's copy of the removed
+// point's own segment was hit at the point's own location, and each round
+// re-found the alternating copy - one zero-length insertion per iteration
+// until the 100-round ceiling. Sabotage: drop AppendCoincidentTwinEdges and
+// this goes red with the sweep at its ceiling and dozens of inserted points.
+TEST(RemoveSweep_IgnoresGeometricTwinsOfIgnoredEdges)
+{
+	const TautRope::CollisionShape SeamA = MakeSeamTestEdge(Vec3(-50.0, 0.0, 0.0), Vec3(50.0, 0.0, 0.0));
+	const TautRope::CollisionShape SeamB = MakeSeamTestEdge(Vec3(-50.0, 0.0, 0.0), Vec3(50.0, 0.0, 0.0));
+	const std::vector<TautRope::CollisionShape> Shapes = { SeamA, SeamB };
+
+	// One point on one copy of the seam, free anchors below it on either side:
+	// the straightened rope no longer wraps the seam, so the removal should
+	// erase the point. The sweep triangle's From corner lies ON the seam line,
+	// which is exactly where the un-ignored twin copy gets hit without the
+	// expansion.
+	std::vector<TautRope::Point> Points(3);
+	Points[0].Location = Vec3(-40.0, -40.0, -20.0);
+	Points[1].Location = Vec3(-20.0, 0.0, 0.0);
+	Points[1].ShapeIndex = 0;
+	Points[1].EdgeIndex = 0;
+	Points[1].Id = 1;
+	Points[2].Location = Vec3(40.0, 40.0, -20.0);
+
+	TautRope::int32 NextId = 2;
+	TautRope::int32 Iterations = 0;
+	TautRope::SweepRemovePoint(Points, 1, Shapes, NextId, nullptr, &Iterations);
+
+	std::printf("      %d rounds, %d points after removal\n",
+		Iterations, static_cast<int>(Points.size()));
+	CHECK_EQ(Points.size(), std::size_t(2));
+	CHECK(Iterations <= 1);
+}
+
+// PROVES: dragging a rope across a twin seam never duplicates points: each
+// transit inserts at most one point per copy, because a hit landing on top of
+// a segment endpoint is filtered as a zero-length duplicate and a filtered hit
+// does not count as loop progress.
+// FIXES: the collision-phase runaway on the lap recording (085126, frame
+// 1203): after a tied crossing inserted one point per copy, the segment next
+// to each twin kept re-finding the OTHER copy at the twin's own location - 51
+// duplicates on one edge and 50 on its twin in one frame's hundred iterations.
+// Sabotage, seen red both ways: disable the filter and the peak point count
+// explodes; make progress hit-based again and the loop spins to its cap.
+TEST(Collision_TwinSeamCrossingNeverDuplicatesPoints)
+{
+	TautRope::CollisionShape SeamA = MakeSeamTestEdge(Vec3(-50.0, 0.0, 0.0), Vec3(50.0, 0.0, 0.0));
+	TautRope::CollisionShape SeamB = MakeSeamTestEdge(Vec3(-50.0, 0.0, 0.0), Vec3(50.0, 0.0, 0.0));
+
+	TautRope::Rope Rope;
+	Rope.AppendToNearbyShapes({ SeamA, SeamB });
+
+	// One anchor stays below the seam; the other descends across it, so the
+	// first contact already reads as wrapping and the twins latch instead of
+	// being pruned mid-transit.
+	const Vec3 AnchorA(-40.0, -25.0, -20.0);
+	for (int Frame = 0; Frame <= 20; ++Frame)
+	{
+		const double H = 40.0 - 2.7 * Frame;
+		Rope.UpdateRope(AnchorA, Vec3(40.0, 40.0, H), 1500.f);
+	}
+
+	std::printf("      peak %d points, worst %d collision iterations\n",
+		Rope.MostRopePoints, Rope.MostCollisionIterations);
+	CHECK(Rope.MostRopePoints <= 4);
+	CHECK(Rope.MostCollisionIterations <= 2);
+	CHECK_EQ(Rope.CollisionIterationCapHits, 0);
 }

@@ -5,6 +5,7 @@
 #include "TautRopeCore/DebugDraw.h"
 #include "TautRopeCore/Movement.h"
 #include "TautRopeCore/Pruning.h"
+#include "TautRopeCore/Seam.h"
 #include "TautRopeCore/VertexHandling.h"
 #include "TautRopeCore/Recording.h"
 
@@ -15,6 +16,7 @@ namespace TautRope
 	void Rope::AppendToNearbyShapes(const std::vector<CollisionShape>& Shapes)
 	{
 		NearbyShapes.insert(NearbyShapes.end(), Shapes.begin(), Shapes.end());
+		WeldSeamsAcrossShapes(NearbyShapes);
 	}
 
 	std::vector<Vec3> Rope::GetRopePoints() const
@@ -159,8 +161,43 @@ namespace TautRope
 			{
 				continue;
 			}
-			const Vec3& LocationA = RopeTargetLocations[i - 1];
-			const Vec3& LocationC = RopeTargetLocations[i + 1];
+			// A seam twin - the coincident point a tied cross-shape hit inserts on
+			// the other hull's collinear edge - hands the solve its own position
+			// back, so the pair never feels the rope's tension. Anchor through a
+			// twin: coincident location AND collinear edge. A coincident corner on
+			// a DIVERGING edge stays an anchor; skipping those fanned clusters out
+			// across the double cone.
+			const auto IsRedundantTwin = [&](const int32 NeighbourIndex) -> bool
+			{
+				const Point& Neighbour = RopePoints[NeighbourIndex];
+				if (Neighbour.ShapeIndex == IndexNone || Neighbour.EdgeIndex == IndexNone)
+				{
+					return false;
+				}
+				if (static_cast<float>((RopeTargetLocations[NeighbourIndex] - PointB.Location).SizeSquared()) > DistanceToleranceSquared)
+				{
+					return false;
+				}
+				const CollisionShape& ShapeB = NearbyShapes[PointB.ShapeIndex];
+				const Int2& EdgeB = ShapeB.Edges[PointB.EdgeIndex];
+				const CollisionShape& ShapeN = NearbyShapes[Neighbour.ShapeIndex];
+				const Int2& EdgeN = ShapeN.Edges[Neighbour.EdgeIndex];
+				const Vec3 DirB = (ShapeB.Vertices[EdgeB.Y] - ShapeB.Vertices[EdgeB.X]).GetSafeNormal();
+				const Vec3 DirN = (ShapeN.Vertices[EdgeN.Y] - ShapeN.Vertices[EdgeN.X]).GetSafeNormal();
+				return Math::Abs(static_cast<float>(Vec3::Dot(DirB, DirN))) > 0.999f;
+			};
+			int32 AnchorAIndex = i - 1;
+			while (AnchorAIndex > 0 && IsRedundantTwin(AnchorAIndex))
+			{
+				--AnchorAIndex;
+			}
+			int32 AnchorCIndex = i + 1;
+			while (AnchorCIndex < Num(RopePoints) - 1 && IsRedundantTwin(AnchorCIndex))
+			{
+				++AnchorCIndex;
+			}
+			const Vec3& LocationA = RopeTargetLocations[AnchorAIndex];
+			const Vec3& LocationC = RopeTargetLocations[AnchorCIndex];
 			const CollisionShape& Shape = NearbyShapes[PointB.ShapeIndex];
 			const Int2& Edge = Shape.Edges[PointB.EdgeIndex];
 			const bool bIsEdgeCornerAtVertexA = NearbyShapes[PointB.ShapeIndex].IsCornerVertex(Edge.X);
@@ -244,6 +281,7 @@ namespace TautRope
 					SegmentSweepHits.push_back(Hit);
 				}
 			}
+			bool bAnyInserted = false;
 			for (int32 i = Num(SegmentSweepHits) - 1; i >= 0; --i)
 			{
 				const HitData& Hit = SegmentSweepHits[i];
@@ -254,12 +292,33 @@ namespace TautRope
 				// stays monotonic. Keeping only the nearest hit here is what let the
 				// rope skip an edge and then meet it later as a fresh collision, with
 				// the rope line already cutting through the solid.
+				// A hit landing on top of either segment endpoint would insert a
+				// zero-length segment: no new constraint, only a duplicate point.
+				// Sweeps skip their own endpoints' edges but not a neighbour's, so
+				// two coincident cross-shape edges otherwise ping-pong - each new
+				// segment re-finds the other edge at the same spot, one insertion
+				// per collision iteration until the cap.
+				const Vec3& SegmentEndA = OriginRopePoints[Hit.RopePointIndex - 1];
+				const Vec3& SegmentEndB = OriginRopePoints[Hit.RopePointIndex];
+				const auto IsZeroLengthInsert = [&](const Vec3& Location) -> bool
+				{
+					return static_cast<float>((Location - SegmentEndA).SizeSquared()) <= DistanceToleranceSquared
+						|| static_cast<float>((Location - SegmentEndB).SizeSquared()) <= DistanceToleranceSquared;
+				};
+
 				std::vector<Point> Group;
 				Group.reserve(Hit.TiedHits.size() + 1);
-				Group.push_back(Point(Hit));
+				if (!IsZeroLengthInsert(Hit.Location))
+				{
+					Group.push_back(Point(Hit));
+				}
 
 				for (const TiedHit& Tied : Hit.TiedHits)
 				{
+					if (IsZeroLengthInsert(Tied.Location))
+					{
+						continue;
+					}
 					Point Extra(Hit);
 					Extra.Location = Tied.Location;
 					Extra.ShapeIndex = Tied.ShapeIndex;
@@ -267,6 +326,11 @@ namespace TautRope
 					Extra.VertIndex = IndexNone;
 					Group.push_back(Extra);
 				}
+				if (Group.empty())
+				{
+					continue;
+				}
+				bAnyInserted = true;
 
 				const Vec3& PrecedingLocation = OriginRopePoints[Hit.RopePointIndex - 1];
 				std::stable_sort(
@@ -288,7 +352,10 @@ namespace TautRope
 					TargetRopePoints.insert(TargetRopePoints.begin() + Hit.RopePointIndex, Inserted.Location);
 				}
 			}
-			bIsAnyNewCollision = !SegmentSweepHits.empty();
+			// Progress is an insertion, not a hit: a hit whose whole group was
+			// filtered as zero-length duplicates would otherwise be re-found and
+			// spin this loop to its cap without changing anything.
+			bIsAnyNewCollision = bAnyInserted;
 			CollisionItr++;
 
 			if (Num(RopePoints) > MostRopePoints)

@@ -6,6 +6,55 @@
 
 namespace TautRope
 {
+	namespace
+	{
+		// IgnoredEdges matches exact shape/edge pairs, but a welded seam carries
+		// the same segment once per hull. Without the twins the sweep re-finds
+		// the other hull's copy of an edge it was told to ignore, at the same
+		// spot, every round - one zero-length insertion per iteration until the
+		// ceiling, which is the double-cone freeze.
+		void AppendCoincidentTwinEdges(
+			std::vector<Int2>& IgnoredEdges
+			, const std::vector<CollisionShape>& Shapes
+		)
+		{
+			const int32 NumOriginal = Num(IgnoredEdges);
+			for (int32 k = 0; k < NumOriginal; ++k)
+			{
+				const Int2 Ignored = IgnoredEdges[k];
+				if (Ignored.X == IndexNone || Ignored.Y == IndexNone)
+				{
+					continue;
+				}
+				const CollisionShape& Owner = Shapes[Ignored.X];
+				const Vec3& A = Owner.Vertices[Owner.Edges[Ignored.Y].X];
+				const Vec3& B = Owner.Vertices[Owner.Edges[Ignored.Y].Y];
+				for (int32 t = 0; t < Num(Shapes); ++t)
+				{
+					if (t == Ignored.X)
+					{
+						continue;
+					}
+					const CollisionShape& Other = Shapes[t];
+					for (int32 f = 0; f < Num(Other.Edges); ++f)
+					{
+						const Vec3& C = Other.Vertices[Other.Edges[f].X];
+						const Vec3& D = Other.Vertices[Other.Edges[f].Y];
+						const bool bSameSegment =
+							(static_cast<float>((A - C).SizeSquared()) <= DistanceToleranceSquared
+								&& static_cast<float>((B - D).SizeSquared()) <= DistanceToleranceSquared)
+							|| (static_cast<float>((A - D).SizeSquared()) <= DistanceToleranceSquared
+								&& static_cast<float>((B - C).SizeSquared()) <= DistanceToleranceSquared);
+						if (bSameSegment && !Contains(IgnoredEdges, Int2(t, f)))
+						{
+							IgnoredEdges.push_back(Int2(t, f));
+						}
+					}
+				}
+			}
+		}
+	}
+
 	void SweepRemovePoint(
 		std::vector<Point>& RopePoints
 		, const int32 RemovePointIndex
@@ -29,6 +78,7 @@ namespace TautRope
 			, Int2(RopePoints[RemovePointIndex].ShapeIndex, RopePoints[RemovePointIndex].EdgeIndex)
 			, Int2(RopePoints[RemovePointIndex + 1].ShapeIndex, RopePoints[RemovePointIndex + 1].EdgeIndex)
 		};
+		AppendCoincidentTwinEdges(IgnoredEdges, Shapes);
 
 		// Each round past the first inserts a rope point, and nothing here
 		// guarantees the sweep stops finding contacts. Unbounded, a removal that
@@ -90,6 +140,7 @@ namespace TautRope
 					Int2(RopePoints[RemovePointIndex - 1].ShapeIndex, RopePoints[RemovePointIndex - 1].EdgeIndex)
 					, Int2(RopePoints[RemovePointIndex].ShapeIndex, RopePoints[RemovePointIndex].EdgeIndex)
 				};
+				AppendCoincidentTwinEdges(IgnoredEdges, Shapes);
 			}
 		}
 		if (OutIterations != nullptr)
