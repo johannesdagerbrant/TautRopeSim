@@ -159,8 +159,24 @@ namespace TautRope
 			{
 				continue;
 			}
-			const Vec3& LocationA = RopeTargetLocations[i - 1];
-			const Vec3& LocationC = RopeTargetLocations[i + 1];
+			// An anchor sitting on top of the solved point - the cross-shape twin
+			// a seam crossing inserts - hands the solve its own position back, so
+			// the pair never feels the rope's tension. Anchor on the nearest
+			// neighbours at a distinct location instead.
+			int32 AnchorAIndex = i - 1;
+			while (AnchorAIndex > 0
+				&& static_cast<float>((RopeTargetLocations[AnchorAIndex] - PointB.Location).SizeSquared()) <= DistanceToleranceSquared)
+			{
+				--AnchorAIndex;
+			}
+			int32 AnchorCIndex = i + 1;
+			while (AnchorCIndex < Num(RopePoints) - 1
+				&& static_cast<float>((RopeTargetLocations[AnchorCIndex] - PointB.Location).SizeSquared()) <= DistanceToleranceSquared)
+			{
+				++AnchorCIndex;
+			}
+			const Vec3& LocationA = RopeTargetLocations[AnchorAIndex];
+			const Vec3& LocationC = RopeTargetLocations[AnchorCIndex];
 			const CollisionShape& Shape = NearbyShapes[PointB.ShapeIndex];
 			const Int2& Edge = Shape.Edges[PointB.EdgeIndex];
 			const bool bIsEdgeCornerAtVertexA = NearbyShapes[PointB.ShapeIndex].IsCornerVertex(Edge.X);

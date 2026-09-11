@@ -20,26 +20,42 @@ namespace TautRope
 			}
 			const Point& LastPoint = RopePoints[i - 1];
 			const Point& CurrentPoint = RopePoints[i];
-			const Point& NextPoint = RopePoints[i + 1];
 			const CollisionShape& Shape = NearbyShapes[CurrentPoint.ShapeIndex];
 			if (CurrentPoint.ShapeIndex == LastPoint.ShapeIndex && CurrentPoint.EdgeIndex == LastPoint.EdgeIndex)
 			{
 				PointsToRemove[i] = true;
 				continue;
 			}
+			// A wrap verdict needs a baseline that carries direction. A neighbour
+			// sitting on top of the judged point - the cross-shape twin a seam
+			// crossing inserts - gives it a zero-length one, and the degenerate
+			// branch answers "wrapping" forever, which is the seam glue. Judge
+			// against the nearest neighbours at a distinct location instead.
+			int32 PrevIndex = i - 1;
+			while (PrevIndex > 0
+				&& static_cast<float>((RopePoints[PrevIndex].Location - CurrentPoint.Location).SizeSquared()) <= DistanceToleranceSquared)
+			{
+				--PrevIndex;
+			}
+			int32 NextIndex = i + 1;
+			while (NextIndex < Num(RopePoints) - 1
+				&& static_cast<float>((RopePoints[NextIndex].Location - CurrentPoint.Location).SizeSquared()) <= DistanceToleranceSquared)
+			{
+				++NextIndex;
+			}
 			// A wrap verdict against a neighbour that is being removed in this
 			// same pass judges a rope that never exists, and the verdict flips
 			// with the neighbour (Pruning_WrapVerdictDependsOnWhichNeighbourSurvives).
 			// Defer it: next frame the point is judged against the survivors.
-			if (PointsToRemove[i - 1] || PointsToRemove[i + 1])
+			if (PointsToRemove[PrevIndex] || PointsToRemove[NextIndex])
 			{
 				continue;
 			}
 			const Quat& EdgeRotation = Shape.EdgeRotations[CurrentPoint.EdgeIndex];
 			const bool bIsRopeWrappingEdge = IsRopeWrappingEdge(
-				LastPoint.Location
+				RopePoints[PrevIndex].Location
 				, CurrentPoint.Location
-				, NextPoint.Location
+				, RopePoints[NextIndex].Location
 				, EdgeRotation
 			);
 			if (!bIsRopeWrappingEdge)

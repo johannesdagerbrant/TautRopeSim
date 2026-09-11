@@ -9,6 +9,8 @@
 #include "TautRopeCore/Config.h"
 #include "TautRopeCore/Movement.h"
 #include "TautRopeCore/Point.h"
+#include "TautRopeCore/Recording.h"
+#include "TautRopeCore/Rope.h"
 
 #include <cmath>
 #include <vector>
@@ -221,4 +223,62 @@ TEST(Movement_FanSolveSnapsMissedEdgesToTheSharedVertex)
 	{
 		CHECK_EQ(Points[i].VertIndex, 0);
 	}
+}
+
+// PROVES: a cross-shape twin pair on a seam edge slides along the edge toward
+// the straightened rope's crossing, because each point's movement anchors skip
+// neighbours at its own location and reach the nearest distinct ones.
+// FIXES: the frozen half of the seam glue in recording 072336: each twin's
+// solve anchored on the twin on top of it, handed back its own position, and
+// the pair - plus everything the pair anchored - never felt the rope's
+// tension. With distinct anchors the same replay slides the pair and sheds to
+// 2 points by frame 600 instead of freezing at 20.
+// Sabotage: anchor on the immediate neighbours again and this goes red with
+// the twins still at their starting spot.
+TEST(Movement_CoincidentTwinsSlideAlongTheSeamEdge)
+{
+	TautRope::CollisionShape Seam;
+	Seam.Vertices = { Vec3(-50.0, 0.0, 0.0), Vec3(50.0, 0.0, 0.0) };
+	Seam.Edges = { Int2(0, 1) };
+	Seam.VertToEdges = { { 0 }, { 0 } };
+	Seam.EdgeRotations = { Quat() };
+	Seam.IsCornerVertexList = { true, true };
+
+	TautRope::Rope Rope;
+	Rope.AppendToNearbyShapes({ Seam, Seam });
+
+	// Anchors straddle the seam edge and sit below it, so the rope wraps the
+	// edge and the twins survive pruning; the straightened rope crosses the
+	// seam at x = 0 while the twins start at x = -20.
+	const Vec3 AnchorA(-40.0, -40.0, -20.0);
+	const Vec3 AnchorB(40.0, 40.0, -20.0);
+
+	std::vector<TautRope::RecordedPoint> Initial(4);
+	Initial[0].Id = 0; Initial[0].Location = AnchorA;
+	Initial[1].Id = 1; Initial[1].Location = Vec3(-20.0, 0.0, 0.0);
+	Initial[1].ShapeIndex = 0; Initial[1].EdgeIndex = 0;
+	Initial[2].Id = 2; Initial[2].Location = Vec3(-20.0, 0.0, 0.0);
+	Initial[2].ShapeIndex = 1; Initial[2].EdgeIndex = 0;
+	Initial[3].Id = 3; Initial[3].Location = AnchorB;
+	Rope.RestoreState(Initial, 4);
+
+	for (int Frame = 0; Frame < 8; ++Frame)
+	{
+		Rope.UpdateRope(AnchorA, AnchorB, 1500.f);
+	}
+
+	// Every surviving edge point must have left the starting spot and closed
+	// most of the 20 units to the crossing.
+	int OnEdge = 0;
+	for (const TautRope::Point& P : Rope.GetPoints())
+	{
+		if (P.ShapeIndex == TautRope::IndexNone)
+		{
+			continue;
+		}
+		++OnEdge;
+		std::printf("      id%d on shape %d at x=%.3f\n", P.Id, P.ShapeIndex, P.Location.X);
+		CHECK(P.Location.X > -10.0);
+	}
+	CHECK(OnEdge >= 1);
 }

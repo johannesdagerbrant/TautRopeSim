@@ -102,8 +102,23 @@ namespace TautRope
 		const int32 NumEdges = Last - First + 1;
 		const Vec3& FanVert = Shape.Vertices[Group.VertIndex];
 
-		const Vec3 ToAnchorA = RopeTargetLocations[First - 1] - FanVert;
-		const Vec3 ToAnchorB = RopeTargetLocations[Last + 1] - FanVert;
+		// Same anchor rule as the per-point solve: an anchor coincident with the
+		// group's boundary point carries no direction, so walk to the nearest
+		// distinct one.
+		int32 AnchorAIndex = First - 1;
+		while (AnchorAIndex > 0
+			&& static_cast<float>((RopeTargetLocations[AnchorAIndex] - RopePoints[First].Location).SizeSquared()) <= DistanceToleranceSquared)
+		{
+			--AnchorAIndex;
+		}
+		int32 AnchorBIndex = Last + 1;
+		while (AnchorBIndex < Num(RopePoints) - 1
+			&& static_cast<float>((RopeTargetLocations[AnchorBIndex] - RopePoints[Last].Location).SizeSquared()) <= DistanceToleranceSquared)
+		{
+			++AnchorBIndex;
+		}
+		const Vec3 ToAnchorA = RopeTargetLocations[AnchorAIndex] - FanVert;
+		const Vec3 ToAnchorB = RopeTargetLocations[AnchorBIndex] - FanVert;
 		const float RadiusA = static_cast<float>(ToAnchorA.Size());
 		const float RadiusB = static_cast<float>(ToAnchorB.Size());
 		if (RadiusA <= KindaSmallNumber || RadiusB <= KindaSmallNumber)

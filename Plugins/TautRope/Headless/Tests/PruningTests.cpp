@@ -144,3 +144,54 @@ TEST(Pruning_WrapVerdictIsDeferredWhileItsNeighbourIsDoomed)
 		DoomedNeighbour, Judged, OtherSide, FlatEdge);
 	CHECK(!bAgainstDoomed);
 }
+
+namespace
+{
+	// Two shapes each owning an edge along the same line - the seam - with the
+	// twins a tied cross-shape sweep inserts stacked at one spot on it.
+	TautRope::CollisionShape MakeSeamShape()
+	{
+		TautRope::CollisionShape Shape;
+		Shape.Vertices = { Vec3(-50.0, 0.0, 0.0), Vec3(50.0, 0.0, 0.0) };
+		Shape.Edges = { TautRope::Int2(0, 1) };
+		Shape.VertToEdges = { { 0 }, { 0 } };
+		Shape.EdgeRotations = { TautRope::Quat() };
+		Shape.IsCornerVertexList = { true, true };
+		return Shape;
+	}
+}
+
+// PROVES: a cross-shape twin pair - two points at the same location on two
+// shapes' seam edges - is marked for removal when the rope is straight, because
+// each twin's wrap verdict is judged against the nearest neighbours at a
+// DISTINCT location instead of against the twin on top of it.
+// FIXES: the seam glue in recording 072336. The coincident twin gave
+// IsRopeWrappingEdge a zero-length baseline, its degenerate branch answered
+// "wrapping" forever, and 20 points stayed glued while the endpoint was dragged
+// 28,853 units away. With distinct-neighbour verdicts the replay sheds to 2.
+// Sabotage: judge against the immediate neighbours again and this goes red with
+// both twins kept.
+TEST(Pruning_CoincidentCrossShapeTwinsAreJudgedAgainstDistinctNeighbours)
+{
+	const TautRope::CollisionShape Seam = MakeSeamShape();
+
+	// Both anchors on the same side of the seam edge's wrap plane: the rope is
+	// straight past the seam and neither twin is wrapping anything.
+	std::vector<TautRope::Point> Points(4);
+	Points[0].Location = Vec3(-40.0, 40.0, 0.0);
+
+	Points[1].Location = Vec3(-20.0, 0.0, 0.0);
+	Points[1].ShapeIndex = 0;
+	Points[1].EdgeIndex = 0;
+
+	Points[2].Location = Vec3(-20.0, 0.0, 0.0);
+	Points[2].ShapeIndex = 1;
+	Points[2].EdgeIndex = 0;
+
+	Points[3].Location = Vec3(40.0, 40.0, 0.0);
+
+	const std::vector<bool> ToRemove = TautRope::GetPointsToRemove(Points, { Seam, Seam });
+
+	CHECK(ToRemove[1]);
+	CHECK(ToRemove[2]);
+}
